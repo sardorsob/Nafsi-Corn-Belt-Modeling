@@ -29,8 +29,7 @@ ENV/
 .serena/
 
 # ── Internal project context (not for submission) ─────────────────────────
-context/*
-!context/archive/
+context/
 DECISIONS.md
 ASSUMPTIONS.md
 

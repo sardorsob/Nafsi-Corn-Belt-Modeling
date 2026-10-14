@@ -37,28 +37,7 @@ npm run typecheck
 npm run lint
 npm run build
 npm audit --audit-level=high
-python scripts/validate-task-statuses.py
-python scripts/check-required-artifacts.py
 ```
-
-Latest QA on 2026-08-19 after `TASK-024`:
-
-- 15 test files and 67 tests passed.
-- TypeScript and ESLint passed.
-- The production build passed with Next.js 16.3.1. In the managed isolated
-  worktree, `npm run build -- --webpack` avoids sandbox/Turbopack process-port
-  restrictions.
-- `npm audit --audit-level=high` reported zero vulnerabilities after a
-  lockfile-only update within the existing manifest ranges.
-- Workflow status and required-artifact validators passed.
-- Browser Use smoke passed at 1440 and 320 px: the Rotation field and stacked
-  summary rail balance at wide width; all five Extremes crop buttons remain
-  intact at 320 px with 44 px minimum targets and no document overflow.
-
-Paper-reader recheck on 2026-09-24 after `TASK-026`: the production build and
-all four shell tests passed. Browser interaction confirmed the current reader
-title and PDF targets. The PDF endpoint returned HTTP 200 with bytes identical
-to the canonical 10-page manuscript; the old public filename returned 404.
 
 ## Tech Stack
 
@@ -76,7 +55,7 @@ to the canonical 10-page manuscript; the old public filename returned 404.
   `public/papers/Reading_the_Corn_Belt.pdf`. The embedded viewer, Open PDF,
   and Download PDF all use `/papers/Reading_the_Corn_Belt.pdf`.
   Keep this file synchronized with `../Reading_the_Corn_Belt.pdf` when
-  regenerating the manuscript. The earlier paper is in `../context/archive/`.
+  regenerating the manuscript.
 - Large Parquet and GeoTIFF artifacts are not shipped to the browser.
 - The target host is Vercel; project settings are not configured in this repo.
 
@@ -89,12 +68,5 @@ to the canonical 10-page manuscript; the old public filename returned 404.
   artifact.
 - The paper reader uses the browser-native PDF viewer; no viewer package was
   added.
-- No Playwright suite is included; component coverage and manual Browser Use
-  smoke form the current interaction gate.
-
-## Workflow
-
-The repository follows `PROJECT.md`, `SCOPE.md`, `TASKS.md`, `AGENTS.md`,
-`memory/`, and `logs/`. `TASK-015` through `TASK-024` were implemented and
-committed sequentially, one task per commit. Merge remains deferred for final
-user review.
+- Automated coverage is component-level; end-to-end browser tests are not
+  included.

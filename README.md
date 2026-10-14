@@ -14,9 +14,8 @@ patterns, soil moisture anomalies, and crop-type prediction.
 > presents all four analyses in 10 pages, including references.
 > [LaTeX source](artifacts/reports/Reading_the_Corn_Belt.tex),
 > [plain text](artifacts/reports/Reading_the_Corn_Belt.txt), and
-> [build instructions and review notes](artifacts/reports/rewrite/README.md) accompany it.
-> The [original paper, TeX source, and bibliography](context/archive/README.md)
-> are preserved in `context/archive/`. The dashboard reader uses the current paper.
+> [build instructions](artifacts/reports/rewrite/README.md) accompany it.
+> The dashboard reader uses the current paper.
 
 ---
 
