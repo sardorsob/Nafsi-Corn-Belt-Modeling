@@ -6,7 +6,7 @@
   "source_input_pages": 16,
   "pages": 17,
   "extracted_words": 9281,
-  "sha256": "58e6a6152e21c0dd0f8a58fa5a27e034f8633bb9c03da05b6e9367ae499542be",
+  "sha256": "b199b3256c2b22ab534d229ddc936615f1260b9de814064cf324c3ad4856f977",
   "canonical_path": "Reading_the_Corn_Belt.pdf",
   "source_path": "artifacts/reports/Reading_the_Corn_Belt.tex",
   "text_path": "artifacts/reports/Reading_the_Corn_Belt.txt",
@@ -52,6 +52,8 @@
   "repository_url": "https://github.com/sardorsob/Nafsi-Corn-Belt-Modeling",
   "dashboard_http_status": 200,
   "dashboard_content_type": "application/pdf",
-  "dashboard_pdf_sha256": "58e6a6152e21c0dd0f8a58fa5a27e034f8633bb9c03da05b6e9367ae499542be",
-  "retired_pdf_http_status": 404
+  "dashboard_pdf_sha256": "b199b3256c2b22ab534d229ddc936615f1260b9de814064cf324c3ad4856f977",
+  "retired_pdf_http_status": 404,
+  "github_link_rebuild_verified": true,
+  "regenerated_content_unchanged": true
 }
