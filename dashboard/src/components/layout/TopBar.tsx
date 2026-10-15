@@ -27,7 +27,7 @@ export function TopBar({
               U.S. Corn Belt
             </p>
             <h1 className="-mt-0.5 truncate font-display text-lg font-bold leading-tight text-ink">
-              GeoCrop
+              Nafsi2026
             </h1>
           </div>
         </div>

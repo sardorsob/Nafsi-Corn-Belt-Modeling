@@ -1,6 +1,6 @@
-# GeoCrop
+# Nafsi2026
 
-Next.js evidence website for the GeoCrop Spatiotemporal Modeling project. The
+Next.js evidence website for the Nafsi2026 project. The
 site opens directly into one source-backed analytical workspace for four
 research tasks across the U.S. Corn Belt.
 

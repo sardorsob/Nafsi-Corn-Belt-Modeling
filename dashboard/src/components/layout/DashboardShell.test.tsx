@@ -339,10 +339,10 @@ describe("DashboardShell", () => {
     mockNavigation.searchParams = new URLSearchParams();
   });
 
-  it("opens directly into the Explore workspace under the GeoCrop brand", () => {
+  it("opens directly into the Explore workspace under the Nafsi2026 brand", () => {
     render(<DashboardShell data={dashboardData} />);
 
-    expect(screen.getByRole("heading", { name: "GeoCrop" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nafsi2026" })).toBeInTheDocument();
     expect(screen.getByText("U.S. Corn Belt")).toBeInTheDocument();
     expect(screen.queryByText("Narrative Atlas")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Story" })).not.toBeInTheDocument();

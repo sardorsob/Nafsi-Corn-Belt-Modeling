@@ -5,6 +5,13 @@ import { describe, expect, it } from "vitest";
 import { metadata } from "../site-metadata";
 
 describe("site metadata", () => {
+  it("uses the Nafsi2026 product name", () => {
+    expect(metadata.title).toBe("Nafsi2026 Interactive Dashboard");
+    expect(metadata.description).toBe(
+      "Interactive dashboard scaffold for the Nafsi2026 project."
+    );
+  });
+
   it("uses the sprout favicon as the site icon", () => {
     expect(metadata.icons).toEqual({
       icon: "/favicon.svg",
@@ -14,7 +21,7 @@ describe("site metadata", () => {
 
     const favicon = readFileSync("public/favicon.svg", "utf-8");
 
-    expect(favicon).toContain("<title>GeoCrop sprout favicon</title>");
+    expect(favicon).toContain("<title>Nafsi2026 sprout favicon</title>");
     expect(favicon).toContain("M14 9.536V7");
   });
 });
