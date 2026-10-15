@@ -13,8 +13,9 @@ research tasks across the U.S. Corn Belt.
   state-grain flood/drought anomaly maps. Task 1 and Task 4 remain chart-led.
 - **Evidence:** visible source paths, artifact dates, denominators, uncertainty,
   method caveats, limitations, and named missing-data states.
-- **Paper:** the `Reading the Corn Belt` drawer shows the current 10-page
-  manuscript, with embedded reading, open, and download actions.
+- **Paper:** the `Reading the Corn Belt` drawer shows the revised manuscript
+  with expanded methodology and technical appendices, with embedded reading,
+  open, and download actions.
 - **Compatibility:** old `view=story` / `view=explore` parameters are ignored
   and removed on the next state update while valid task/filter context remains;
   retired map layers show a warning and use measured regular-rotation share.

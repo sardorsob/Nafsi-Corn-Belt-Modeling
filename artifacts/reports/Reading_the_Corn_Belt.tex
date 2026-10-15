@@ -1,13 +1,14 @@
-\documentclass[11pt,letterpaper]{article}
+% Revised manuscript transcribed from the user-supplied NAFSI PDF, 2026-10-14.
+% This file is the authoritative editable source; the .txt file is PDF extraction.
+\documentclass[10pt,letterpaper]{article}
 \usepackage[margin=1in]{geometry}
 \usepackage[T1]{fontenc}
-\usepackage{lmodern}
-\usepackage{microtype}
-\usepackage{graphicx}
-\usepackage{amsmath,amssymb}
-\usepackage{booktabs,array}
+\usepackage{mathptmx,microtype}
+\usepackage{graphicx,amsmath,amssymb}
+\usepackage{booktabs,array,longtable}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[font=small,labelfont=bf]{caption}
+\usepackage{placeins,float}
 \usepackage{xcolor}
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,linkcolor=blue!45!black,citecolor=blue!45!black,urlcolor=blue!45!black,
@@ -22,111 +23,527 @@
 \renewcommand{\floatpagefraction}{0.75}
 \setlength{\bibsep}{2pt}
 \renewcommand{\bibfont}{\small}
-\newcommand{\phenologyfigure}{%
-\begin{figure}[htbp]
-\centering\includegraphics[width=\linewidth]{rewrite/figures/phenology.pdf}
-\caption{Regional seasonal NDVI curves fitted to pooled crop--week spatial means. Lines show posterior mean curves; shading spans the 5th--95th predictive percentiles. The bands describe variation in regional means, not the spatial spread among fields. Peak labels refer to the fitted mean. The displayed window excludes winter wheat's preceding autumn growth.}
-\label{fig:phenology}
-\end{figure}}
-\newcommand{\rotationfigure}{%
-\begin{figure}[htbp]
-\centering\includegraphics[width=\linewidth]{rewrite/figures/rotation.pdf}
-\caption{Crop-history classes and their sensitivity to the rule. (a) The smoothed 2015--2024 map covers 2,084,112 eligible cells in the enclosing raster footprint, including cells outside the 13 state polygons. Spacing is 556.7\,m (NAD83 / Conus Albers, EPSG:5070); gray marks excluded cells. (b) The regular share before smoothing changes with the alternation and template-distance thresholds. The outlined cell marks the primary rule. Eligibility and monoculture settings remain fixed.}
-\label{fig:rotation}
-\end{figure}}
 \title{Reading the Corn Belt\\[0.3em]\large Crop History, Vegetation Timing, and Soil Moisture}
-\author{Diego Osborn \quad Sardor Sobirov \quad Ivan Xie \quad Kyle Choi\\[3pt]
+\author{Diego Osborn\thanks{diegoisaacosborn@gmail.com} \quad
+Sardor Sobirov\thanks{sardorbsobirov@gmail.com} \quad
+Ivan Xie\thanks{ivxie@ucsd.edu} \quad
+Kyle Choi\thanks{k3choi@ucsd.edu}\\[3pt]
 \small Hal{\i}c{\i}o{\u g}lu Data Science Institute, UC San Diego}
-\date{}
+\date{\small 2026 NAFSI Student Data Challenge -- Track 1}
 \begin{document}
 \maketitle
-\vspace{-2em}
-
 \begin{abstract}
-Annual crop maps, seasonal vegetation, and soil moisture describe different parts of an agricultural landscape. We examined their roles in a region covering 13 U.S. Corn Belt states through four complementary analyses. Smoothed regional NDVI curves separated winter wheat's early peak from the later peaks of corn and soybean. A rule-based analysis of ten-year crop histories labeled 27.36\% of 2.08 million eligible grid cells as regular corn--soybean rotation, with substantial sensitivity to the rule's thresholds. Weekly moisture percentiles described broadly wet conditions in the selected 2019 window and more geographically uneven dryness in 2022. Finally, a classifier combining crop history with concurrent seasonal observations achieved 79.21\% agreement with CDL labels on a balanced 2023 test sample. In the 2022 validation comparison, NDVI improved accuracy over crop history by 1.74 percentage points, while SMAP added little. These results support seasonal vegetation as a useful complement to crop history. Their interpretation is bounded by regional aggregation, retrospective reference periods, and unresolved feature-construction differences between training and test data.
+
+We use three CropSmart data products, the USDA Cropland Data Layer (CDL), weekly MODIS NDVI, and weekly SMAP Level-4 soil moisture, to study what is planted across the U.S. Corn Belt, how those crops develop through the season, and the soil conditions they develop under. By fitting Hilbert space Gaussian processes to crop-level NDVI, we find that corn, soybean, and winter wheat are separated by when their seasonal peak occurs rather than how high it reaches. We identify corn-soybean rotation from ten-year CDL histories with a transparent rule, and find that how much of the region counts as regularly rotated depends heavily on how strictly ``regular'' is defined. We score soil moisture against its usual seasonal range with a conjugate Bayesian model suited to SMAP's short record, and contrast the wet 2019 planting season with the dry spell of summer 2022. Finally, we train a gradient boosted classifier that combines crop history with current-season observations. Seasonal NDVI adds modestly to what crop history already provides, soil moisture adds almost nothing, and the classifier is weakest on fields whose crop histories are irregular. We discuss how these outputs could be combined, as well as the limitations of our implementation.
+
 \end{abstract}
 
-{\centering\small\textbf{GitHub: }\url{https://github.com/sardorsob/GeoCrop-Spatiotemporal-Modeling}\par}
+{\centering\small\textbf{GitHub: }\url{https://github.com/sardorsob/Nafsi-Corn-Belt-Modeling}\par}
 
-\section{Introduction}
-\label{sec:introduction}
-An annual crop map records what grew where. A vegetation time series adds when the canopy developed, and soil moisture describes part of the environment in which it grew. Reading these sources together can help distinguish persistent crop patterns from seasonal changes. The practical question is which information each source adds, and how much that addition improves crop mapping.
+\noindent\textbf{Keywords:} crop rotation, phenology, soil moisture anomalies, Hilbert space Gaussian process, crop type classification
 
-Previous studies have used MODIS vegetation time series to distinguish crop types \citep{wardlow2007modis} and historical crop maps to predict subsequent planting \citep{zhang2019cropprediction}. Our project brings these two perspectives together with soil-moisture summaries. It examines four questions: how seasonal vegetation differs among crops, how often corn--soybean histories follow a repeated sequence, where surface moisture departs from its seasonal reference, and whether current-season observations improve classification beyond crop history.
+\section{Introduction}\label{sec:introduction}
 
-The first three analyses describe regional patterns; the fourth tests how seasonal observations add to classification based on crop history. Agricultural resilience motivates the work, but the study does not measure yield losses, recovery, or the effects of management decisions.
+Climate variability is an increasingly present threat to U.S. agriculture: shifting precipitation patterns, more frequent flash droughts, and wet springs that delay or prevent planting all affect what can be grown, and when. Responding to these threats requires knowing three things about any given field, namely what is planted there, how that crop is developing through the season, and what conditions it is developing under. No single dataset answers all three. The United States Department of Agriculture (USDA) Cropland Data Layer (CDL) records the crop in each pixel once a year, but says nothing about the season itself \citep{cdl_cropscape}. A vegetation index such as the Normalized Difference Vegetation Index (NDVI) tracks canopy development week by week, but does not label the crop \citep{modis_vi_userguide}. And soil moisture describes the water available to the crop, but at a much coarser resolution than either of the other two \citep{reichle2017smap}.
 
-\section{Data and study design}
-\label{sec:data}
-The study covers Illinois, Indiana, Iowa, Kansas, Kentucky, Michigan, Minnesota, Missouri, Nebraska, North Dakota, Ohio, South Dakota, and Wisconsin. We used three data streams: annual USDA Cropland Data Layer (CDL) labels, weekly MODIS normalized difference vegetation index (NDVI) composites, and weekly SMAP Level-4 surface soil moisture. CDL supplies the crop categories \citep{cdl_cropscape}; NDVI summarizes canopy greenness \citep{modis_vi_userguide}; and SMAP L4 combines observations with a land-surface model to estimate moisture \citep{reichle2017smap}. NDVI and SMAP composites were accessed through CropSmart.
+The CropSmart digital twin makes all three of these products available as operational data streams, and the National Food Security \& Innovation (NAFSI) Track 1 challenge asks how they can be used together for crop monitoring. Previous work has shown that each source is useful on its own: Moderate Resolution Imaging Spectroradiometer (MODIS) vegetation time series can separate crop types \citep{wardlow2007modis}, and historical CDL sequences are strong predictors of next year's planting \citep{zhang2019cropprediction}. What is less clear is how much each source adds once the others are available. That is the question that ties our four analyses together:
 
-The analyses use different time windows (Table~\ref{tab:design}). For vegetation, the workflow retains approximately day of year 100--310, covering spring through autumn. Moisture references use matching ISO weeks for the selected event windows. Crop masks follow annual CDL labels, except where the classifier uses a fixed eligible footprint and balances the target classes during sampling.
+\begin{enumerate}
 
-Raster downloads use a buffered rectangle enclosing the study states. Whole-raster summaries therefore include eligible cells outside their boundaries: the rotation output assigns 66,107 of its 2,084,112 cells (3.17\%) to \texttt{outside\_configured\_states}. We retain that footprint for the overall rotation shares and restrict named-state moisture summaries to their assigned state groups.
+\item How do NDVI curves differ between corn, soybean, and winter wheat, and which features of those curves separate the crops consistently across years?
 
-\begin{table}[htbp]
+\item How common is regular corn-soybean rotation, and how sensitive is that answer to the definition of ``regular''?
+
+\item Where did surface soil moisture depart from its usual seasonal range during the 2019 Midwest flooding and the 2022 Great Plains dry spell, and which crops and growth stages did those departures overlap?
+
+\item Do current-season NDVI and soil moisture improve crop type classification beyond what crop history alone provides, and where does the classifier fail?
+
+\end{enumerate}
+
+The first three analyses are descriptive and the fourth is predictive, but they inform each other. The phenology curves from Task 1 explain why seasonal NDVI helps the classifier in Task 4, the rotation regimes from Task 2 explain where the classifier struggles, and the growth-stage calendar from Task 1 is what lets us interpret the soil moisture anomalies from Task 3 in agricultural terms. We note up front that agricultural resilience motivates this work, but we do not measure yield losses, recovery, or the effect of any management decision.
+
+In Section~\ref{sec:data}, we describe the three data sources, the study area, and how the sources were aligned. In Section~\ref{sec:methods}, we describe the method behind each analysis and why we chose it. In Section~\ref{sec:results}, we report the results of each analysis. Sections~\ref{sec:discussion}--\ref{sec:future} discuss the challenge questions, limitations, and suggested future work. Additional technical details for each method can be found in the appendices.
+
+\section{Data}\label{sec:data}
+
+Our study area covers 13 Corn Belt states: Illinois, Indiana, Iowa, Kansas, Kentucky, Michigan, Minnesota, Missouri, Nebraska, North Dakota, Ohio, South Dakota, and Wisconsin. We used three data streams, all accessed through CropSmart:
+
+\begin{enumerate}
+
+\item USDA CDL: an annual, 30 m raster that assigns each pixel to one of more than 100 crop and land cover categories, produced by USDA National Agricultural Statistics Service (NASS) from satellite imagery and ground reference data \citep{cdl_cropscape}. Each category has a numeric code - the ones we use most are corn (1), soybean (5), winter wheat (24), winter wheat/soybean double crop (26), and oats (28). We used CDL years 2008-2025.
+
+\item MODIS NDVI: a satellite measure of how green and dense the vegetation in a pixel is, ranging from about 0.1 for bare soil to above 0.9 for a full crop canopy \citep{modis_vi_userguide}. Over a season, a crop's NDVI rises as it leafs out, peaks at full canopy, and falls as it matures. We used weekly 250 m composites covering approximately the 100th to 310th day of the year (DOY) - i.e., spring through mid-autumn.
+
+\item SMAP L4 soil moisture: weekly surface soil moisture - i.e., the fraction of the topsoil's volume that is water - on a 9 km grid from NASA's Soil Moisture Active Passive (SMAP) mission, which combines satellite observations with a land surface model to produce estimates without gaps \citep{reichle2017smap}. We used SMAP from 2015, the first full year of the mission, onward.
+
+\end{enumerate}
+
+These three products differ by more than two orders of magnitude in spatial resolution. A single SMAP cell spans roughly 1,300 MODIS pixels and over 90,000 CDL pixels, which will matter for how we interpret both the moisture analysis and its contribution to the classifier.
+
+Because the three data streams come at very different resolutions, a single location on the ground is described by one CDL pixel, a different MODIS pixel, and yet another SMAP pixel. To compare them, we placed all three on a common grid of roughly 557 m cells,\footnote{All rasters were requested in the same equal-area map projection (NAD83 / Conus Albers, EPSG:5070) on a $4096\times2960$ grid, so the sources could be matched cell by cell.} so that each grid cell carries a crop label, an NDVI time series, and a soil moisture time series. Every analysis that follows works with these grid cells rather than with individual fields.
+
+Two consequences of this are worth keeping in mind. First, placing data on a finer grid does not make it more detailed: one 9 km SMAP value is simply copied to every grid cell inside it, so neighboring cells, and often neighboring fields growing different crops, share the same soil moisture value. Second, we downloaded the data as a rectangle around the 13 states, so a small share of cells (3.17\% of those in the rotation analysis) lie just outside the state borders. We keep them in the region-wide rotation results, but leave them out of any state-by-state summaries.
+
+Each analysis uses the time window that suits its question, summarized in Table 1. The phenology analysis uses every year in which both CDL and NDVI are available, the rotation analysis uses a ten-year window, the moisture analysis compares two event windows against a 2015-2021 reference period, and the classifier is trained, validated, and tested on separate years.
+
+\begin{table}[!htbp]
 \centering\small
-\begin{tabular}{>{\raggedright\arraybackslash}p{0.20\linewidth}>{\raggedright\arraybackslash}p{0.31\linewidth}>{\raggedright\arraybackslash}p{0.40\linewidth}}
+\begin{tabular}{@{}p{0.07\linewidth}>{\raggedright\arraybackslash}p{0.39\linewidth}>{\raggedright\arraybackslash}p{0.46\linewidth}@{}}
 \toprule
-Analysis & Time window & Unit and main output \\
+Task & Time window & Unit and main output \\
 \midrule
-Seasonal signatures & 2008--2025, available weeks & Crop--week regional means; one pooled curve per crop \\
-Crop histories & 2015--2024 & Eligible grid cell; rule-based sequence class \\
-Moisture conditions & Reference: 2015--2021; events: Apr--Jul 2019 and Jun--Aug 2022 & Cell--week scores; state--crop summaries \\
-Crop classification & Train: 2013--2021; validation: 2022; test: 2023 & Balanced cell--year sample; current-year CDL class \\
+1 & 2008--2025, available weeks & Crop--week regional means; one fitted curve per crop \\
+2 & 2015--2024 & Eligible grid cell; rule-based sequence class \\
+3 & Reference: 2015--2021; events: Apr--Jul 2019, Jun--Aug 2022 & Cell--week scores; state--crop summaries \\
+4 & Train: 2013--2021; validation: 2022; test: 2023 & Balanced cell--year sample; current-year CDL class \\
 \bottomrule
 \end{tabular}
-\caption{Analysis windows and units. The classifier uses preceding crop history and current-season observations; the event analysis includes 2019 in its reference period.}
+\caption{Analysis windows and units for each task. The classifier uses preceding crop history together with current-season observations. Note that the moisture reference period includes the 2019 event year but precedes 2022.}
 \label{tab:design}
 \end{table}
 
-The processing workflow requests rasters in NAD83 / Conus Albers (EPSG:5070), stores them as indexed tables, and joins sources by grid coordinates. Source resolution and analysis spacing must be distinguished. Historical CDL is commonly described at 30\,m, the MODIS vegetation product at 250\,m, and SMAP L4 at 9\,km. The saved rotation raster records 556.7\,m spacing on a $4096\times2960$ grid. That spacing is verified for this output. Resampling cannot create finer independent moisture information. Missing metadata for some intermediate tables also leaves complete cross-product grid alignment unverified.
+Figure~\ref{fig:workflow} shows how the analyses relate. CDL plays two roles throughout: it supplies the crop histories that the rotation analysis and classifier are built on, and it supplies the crop labels that define which cells enter each NDVI and moisture summary.
 
-Figure~\ref{fig:workflow} shows how the analyses relate. CDL labels define crop groups for the vegetation and moisture summaries as well as supplying crop histories. The classifier derives its features directly from annual labels and seasonal observations. It does not ingest the fitted Gaussian-process curves, Bayesian moisture scores, or the full-period rotation map.
-
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering\includegraphics[width=\linewidth]{rewrite/figures/workflow.pdf}
-\caption{The three data streams support descriptive analyses and a separate classification experiment. Solid arrows mark each descriptive analysis's main input; CDL also supplies its crop groupings. Dashed paths show source-derived features entering the classifier. Fitted curves and moisture scores do not feed the classifier.}
+\caption{The three data streams support three descriptive analyses and one classification experiment. Solid arrows mark each descriptive analysis's main input; CDL also supplies the crop groupings for the NDVI and moisture summaries. Dashed paths show source-derived features entering the classifier. The fitted curves and moisture scores themselves do not feed the classifier.}
 \label{fig:workflow}
 \end{figure}
 
-\input{rewrite/sections/phenology_rotation}
-\input{rewrite/sections/moisture}
+\FloatBarrier\section{Methodology}\label{sec:methods}
 
-\begin{figure}[htbp]
+\subsection{Seasonal crop signatures}\label{sec:method-phenology}
+
+Corn and soybean can reach similar peak greenness, so a single NDVI snapshot taken at the height of summer may not tell them apart. Our hypothesis going into Task 1 was that the crops are better separated by the shape and timing of their seasonal curves - i.e., when they green up, how quickly, and when they peak. We added winter wheat as a third crop because it follows an entirely different calendar: it is planted in the fall, overwinters, greens up in early spring, and is harvested by midsummer, giving a cool-season contrast to the two warm-season row crops.
+
+For each year from 2008 to 2025, we joined that year's weekly NDVI to that year's CDL labels and computed, for every week, the spatial mean NDVI across all corn, soybean, and winter wheat cells (CDL codes 1, 5, and 24). Using each year's own CDL labels means that a cell can move between crop groups from year to year, which is exactly what happens in a rotated field. Alongside the mean, we computed the 25th and 75th percentiles across cells for each crop-week, giving an interquartile range (IQR) that describes how much greenness varies among fields in the same week. We then converted each composite's start date to DOY and pooled all years, giving 535 crop-week observations per crop.
+
+Pooled across years, these observations do not lie on a single clean curve. The composite dates fall on different DOYs each year, and year-to-year differences in planting date and weather shift the whole curve earlier or later. Rather than imposing a fixed parametric shape on the season, we model NDVI as a smooth, latent function of DOY, $t$, using a Gaussian process (GP):
+
+\begin{equation}
+\mathrm{NDVI}_t=\mu+f(t)+\varepsilon_t,\qquad f\sim\mathcal{GP}\!\left(0,k(t,t')\right),\quad \varepsilon_t\sim\mathcal{N}(0,\sigma^2).
+\label{eq:gp}
+\end{equation}
+Here $\mu$ is a baseline NDVI we define, $f$ is the seasonal deviation from that baseline, and $\varepsilon_t$ absorbs the variation of individual crop--week means around the curve. We also used the squared-exponential kernel function to model the covariance,\footnote{The squared-exponential kernel produces very smooth curves, which suits regional averages of canopy development, as these change gradually from week to week rather than jumping abruptly.} such that:
+\begin{equation}
+k(t,t')=\alpha^2\exp\!\left(-\frac{(t-t')^2}{2\ell^2}\right).
+\label{eq:kernel}
+\end{equation}
+
+where the amplitude, $\alpha$, controls the model's ``wiggliness,'' and the length-scale $\ell$ controls how quickly the curve can change, measured in days. A GP is a natural choice here because it lets the data determine where the peak falls and how steep the green-up is, while still returning a full posterior distribution over the curve rather than a single fitted line.
+
+However, GPs are notably bottlenecked by their computational expense, $\mathcal{O}(N^3)$, where $N$ denotes the number of data points.\footnote{The estimation and prediction process for GPs requires the inversion of the $N\times N$ kernel matrix \citep{riutort2023hsgp}.} With 535 observations per crop, an exact GP would still be tractable here, but that cost quickly becomes prohibitive once the model moves beyond regional averages - to year-specific curves, or to individual pixels, where $N$ can grow into the millions. We pivot to model NDVI with a Hilbert Space Gaussian Process (HSGP) instead. HSGPs reduce the computational cost of GPs substantially, to $\mathcal{O}(mN)$,\footnote{Here $m$ is the number of basis functions used in the approximation; we use $m=25$.} by projecting the GP onto a set of basis functions \citep{riutort2023hsgp}. This allows the model to scale linearly with the number of observations, so the same framework can be carried forward to those larger problems without being rebuilt.
+
+We fit a separate model to each crop so that each could learn its own length-scale and noise level, with the following priors:
+
+\begin{equation}
+\begin{gathered}
+\mu\sim\mathcal{N}(0.65,0.25),\qquad \alpha\sim\operatorname{HalfNormal}(0.4),\\
+\ell\sim\operatorname{LogNormal}(\ln25,0.5),\qquad \sigma\sim\operatorname{HalfNormal}(0.1).
+\end{gathered}
+\label{eq:priors}
+\end{equation}
+
+We chose to combine the HSGP model with Stochastic Variational Inference (SVI) for posterior estimation rather than MCMC, thereby yielding approximate rather than exact posterior estimates \citep{blei2017vi}, a tradeoff we accept in favor of speed. From the fitted posterior, we report the posterior mean curve, its peak DOY and peak NDVI, and 90\% posterior predictive bands. Model implementation details can be seen in Appendix~\ref{app:hsgp}.
+
+The pooled model describes the average season. To ask which features separate the crops across years, we also extracted three features from each crop's raw weekly means in each year: the DOY of maximum NDVI, the maximum NDVI itself, and the green-up slope, defined as the change in NDVI from the first observed week to the peak week, expressed per 30 days.
+
+\subsection{Crop-history patterns}\label{sec:method-rotation}
+
+Corn-soybean rotation - i.e., alternating the two crops every year - is the most common rotation in the Midwest and the canonical test case the challenge poses. And comparing multi-year CDL sequences is an established way to describe rotation patterns \citep{sahajpal2014recruit}. Our goal was a criterion that is transparent, so that any cell's label can be traced back to its ten-year sequence, and that separates three behaviors: regular alternation, persistent single-crop cultivation (monoculture), and everything else.
+
+We considered the 2015-2024 CDL sequence of every cell that was corn or soybean in at least one year. A cell that was grassland for eight years and corn for two does not carry enough information to say anything about its rotation, so we required corn or soybean in at least five of the ten years. The five-year threshold defines which cells we describe - it is separate from the stricter requirements of the regular-rotation rule below.
+
+Let $x_1,\ldots,x_{10}$ denote a cell's CDL labels for 2015--2024, and let $S=\{\text{corn},\text{soybean}\}$. We computed four metrics from each sequence. The \emph{alternation score} is the fraction of adjacent-year pairs that switch between corn and soybean, among pairs where both years are corn or soybean:
+\begin{equation}
+A=\frac{\sum_{t=1}^{9}\mathbf{1}[x_t\in S,\,x_{t+1}\in S,\,x_t\ne x_{t+1}]}{\sum_{t=1}^{9}\mathbf{1}[x_t\in S,\,x_{t+1}\in S]}.
+\label{eq:alternation}
+\end{equation}
+Pairs involving any other crop are left out of both the numerator and the denominator, so $A$ measures how consistently the cell alternates \emph{when} it grows corn or soybean. The \emph{pattern distance} counts mismatches against the closer of the two perfect alternation templates, $T^{(\mathrm{Corn})}=(\mathrm{Corn},\mathrm{Soybean},\mathrm{Corn},\ldots)$ and $T^{(\mathrm{Soybean})}=(\mathrm{Soybean},\mathrm{Corn},\mathrm{Soybean},\ldots)$:
+\begin{equation}
+D=\min_{T\in\{T^{(\mathrm{Corn})},T^{(\mathrm{Soybean})}\}}\sum_{t=1}^{10}\mathbf{1}[x_t\ne T_t].
+\label{eq:distance}
+\end{equation}
+Unlike $A$, any year of another crop counts as a mismatch, so $D$ penalizes interruptions that $A$ ignores.\footnote{E.g., the sequence corn, soybean, corn, soybean, wheat, corn, soybean, corn, soybean, corn has $A=1$, since every corn/soybean pair alternates, but $D\geq1$ because of the wheat year.}
+Finally, the \emph{longest run} $R$ is the length of the longest streak of the same crop, and the \emph{crop share} $P$ is the fraction of the ten years occupied by the most frequent crop. These two capture persistence rather than alternation.
+
+We applied the monoculture rule first, then the regular-rotation rule:
+\begin{equation}
+\mathrm{class}=\begin{cases}
+\text{monoculture} & \text{if }R\geq7\text{ or }P\geq0.8,\\
+\text{regular} & \begin{array}[t]{@{}l@{}}\text{else if }A\geq0.70,\ D\leq3,\text{ and corn or soybean}\\\text{in at least 7 of 10 years},\end{array}\\
+\text{irregular} & \text{otherwise.}
+\end{cases}
+\label{eq:rule}
+\end{equation}
+
+The thresholds encode a deliberately strict notion of ``regular'' - a cell may deviate from perfect alternation in at most three of ten years and must spend at least seven years in corn or soybean. Because there is no ground truth for what counts as ``regular,'' we also re-ran the classification over a grid of alternation thresholds (0.50 to 0.70) and mismatch allowances (3 to 6), holding eligibility and the monoculture rule fixed, to see how much the regular share depends on these choices.
+
+Annual CDL labels contain classification errors, and a single mislabeled year can move a cell from regular to irregular even when the field around it rotates normally. To clean up these isolated labels, we smoothed the class map with a majority filter: each cell looks at the 3 $\times$ 3 block of cells centered on it - i.e., itself and its eight immediate neighbors, and takes on whichever class is most common in that block.\footnote{E.g., an irregular cell surrounded by eight regular cells would be relabeled regular, whereas a cell that already agrees with most of its neighbors keeps its label. Cells outside the eligible footprint are never relabeled into it.} The reasoning is that a rotation practice applies to a whole field, which often spans more than one grid cell, so a lone cell that disagrees with all of its neighbors is more likely a labeling error than a genuinely different field. However, smoothing can also change a cell's label away from what its own sequence says, so we report both the raw and smoothed shares.
+
+The three classes summarize a cell's whole decade in one label. That makes them easy to map, but it inherently hides which year-to-year moves a history is made of: an irregular cell could be one that repeats corn, one that occasionally grows wheat or alfalfa, or one with a single mislabeled year, and the class alone cannot tell these apart. To see which moves are most common across the study area, we recoded every year of every eligible cell as corn, soybean, or other (any other CDL class) and took each pair of consecutive years, 2015$\to$2016 through 2023$\to$2024, giving us nine pairs per cell.
+
+Letting $n_{ij}$ be the number of pairs that go from crop $i$ in one year to crop $j$ in the next, we divided each count by the total for its starting crop:
+\begin{equation}
+P(x_{t+1}=j\mid x_t=i)=\frac{n_{ij}}{\sum_k n_{ik}}.
+\label{eq:markov}
+\end{equation}
+
+where $k$ runs over corn, soybean, and other. Each value is the probability that a cell grows crop $j$ next year given that it grew crop $i$ this year, so each row of the resulting 3 $\times$ 3 table sums to 1. This table is called a first-order Markov transition matrix, where ``first-order'' refers to the fact that each probability depends only on the current year and not on the years before it. We used the matrix to describe the landscape, not to classify it; it does not enter the rule in Equation~\ref{eq:rule}. It is also pooled over all eligible cells, so a row describes how all corn years behave together rather than how any single cell behaves. Per-cell versions of the same counts are used as features by the classifier - this can be observed in Appendix~\ref{app:classifier}.
+
+\subsection{Wet and dry soil conditions}\label{sec:method-moisture}
+
+We examined two event windows chosen to contrast a wet and a dry season: April-July 2019, during the widespread Midwest flooding and delayed planting, and June-August 2022, during the Great Plains dry spell. To keep the moisture analysis aligned with the rotation analysis, we used the same eligible cells and labeled each cell with the CDL class from its event year, since fields change crops between years and we wanted each summary to reflect what was actually planted when the anomaly occurred. We report results for the crop strata of corn (1), soybean (5), winter wheat/soybean double crop (26), and oats (28).
+
+``Wet'' and ``dry'' are only meaningful relative to what is usual for a given place and time of year. For each cell and International Organization for Standardization (ISO) calendar week, we computed the mean $\bar{x}$ and sample standard deviation $s$ of surface soil moisture over the 2015--2021 reference years. Because SMAP begins in 2015, each cell--week has at most $n=7$ reference observations. The standard anomaly is then the $z$-score:
+\begin{equation}
+z=\frac{x_{\mathrm{obs}}-\bar{x}}{s},
+\label{eq:z}
+\end{equation}
+which we clipped to $[-5,5]$.
+
+With only seven reference years, $s$ is itself a noisy estimate: a cell that happened to have seven similar years will have a small $s$, and an ordinary observation will then produce a large $z$. Treating $z$ as standard normal ignores this uncertainty in $\bar{x}$ and $s$, and is therefore overconfident about how unusual an observation is. To account for it, we treat the reference mean $\bar{x}$ and variance $s^2$ of each cell--week as random parameters with a conjugate Normal--Inverse-Gamma (NIG) prior \citep{murphy2007conjugate}:
+\begin{equation}
+s^2\sim\operatorname{Inv\text{-}Gamma}(\alpha_0,\beta_0),\qquad \bar{x}\mid s^2\sim\mathcal{N}\!\left(\mu_0,\frac{s^2}{\lambda_0}\right).
+\label{eq:nig}
+\end{equation}
+
+For each observed cell--week, we evaluate the predictive cumulative distribution function (CDF) at the observation, $F(x_{\mathrm{obs}})$, which gives the share of the predicted usual conditions that are drier than what was actually observed. We call this the moisture percentile. E.g., a value of 0.05 means the observed soil moisture was drier than 95\% of what we would expect for that cell in that week, while a value of 0.5 means conditions were exactly typical. A low percentile tells us that conditions were unusually dry, but it is not by itself a measure of drought, which also depends on how long the dry conditions last and whether they affect the crops.
+
+We averaged the percentile over every cell--week in each state--crop group, and also counted the fraction of cell--weeks beyond fixed thresholds ($z>1.5$ for wetness, and $F<0.1$ for dryness). Because a cell observed in several weeks contributes several times, these fractions describe the combined spatial and temporal extent of unusual conditions within the sampled cells.
+
+\subsection{Crop classification}\label{sec:method-classifier}
+
+The classifier predicts the current year's CDL class for a cell from four categories: corn (1), soybean (5), winter wheat (24), and Other, which combines all remaining selected CDL codes (0-61). Winter wheat serves as the required third crop class, and Other ensures the classifier must also recognize cells that are none of the three. Because the NDVI features summarize the season through its late weeks, this is an end-of-season mapping task rather than a pre-planting forecast.
+
+The classification mask retained cells with a selected CDL code in at least three years during 2013-2022, separately from the rotation analysis's eligibility rule. Each observation is one cell in one year. Corn and soybean dominate the Corn Belt, so a random sample would be mostly those two crops and a classifier could score well while largely ignoring winter wheat. To prevent this, we sampled 125,000 observations per class per year. This gave 4.5 million training observations from 2013-2021, 500,000 validation observations from 2022, and 500,000 test observations from 2023. The consequence is the ``true'' crop for each observation is its CDL label, which is itself a satellite-based estimate with its own errors, so our accuracy measures how often the classifier agrees with the CDL, not how often it matches what was actually planted. Also, because each class makes up a quarter of the sample, each class counts equally toward overall accuracy. However, balancing only changes what we evaluate on, not the landscape the classifier would be applied to. If we used it to map every cell in the Corn Belt, most of those cells would be corn or soybean, so the map's overall accuracy would depend mostly on how well the classifier handles those two crops, and less on winter wheat.
+
+The full model uses 38 features in three groups, one per data stream (full list in Appendix~\ref{app:classifier}):
+
+\begin{itemize}
+
+\item CDL history (19) describes what the cell grew before: the crops of the five preceding years, how often it switched or repeated crops, how long since it last grew corn or soybean, the sequence metrics of Section~\ref{sec:method-rotation}, and what its immediate neighbors grew.
+
+\item NDVI (15) describes the current season's curve: its base, peak, and amplitude, the timing of green-up and peak, and its average level in the early, middle, and late season. These are computed directly from the weekly observations, not from the fitted curves of Section 3.1.
+
+\item SMAP (4) describes the season's moisture: spring and growing-season averages, and how often the cell was unusually wet or dry.
+
+\end{itemize}
+
+We used a LightGBM, a gradient-boosted decision tree implementation designed for large tabular datasets \citep{ke2017lightgbm}. Tree ensembles suit this problem because the relationships we expect are nonlinear and interaction-heavy - e.g., the meaning of a late NDVI peak depends on last year's crop - and LightGBM handles missing values natively, which mattered because SMAP features are missing for the 2013-2014 training rows. We used early stopping on the 2022 validation set to decide how many trees to grow (hyperparameters in Appendix~\ref{app:classifier}). To measure what each data source adds, we trained four configurations on the same training and validation years: CDL history only, CDL plus NDVI, CDL plus SMAP, and all three. The comparison was made on the 2022 validation sample. We then evaluated the full model on 2023.
+
+We report overall accuracy, the per-class F1 score, and macro-F1. For class $c$:
+\begin{equation}
+\mathrm{F1}_c=\frac{2P_cR_c}{P_c+R_c},
+\label{eq:f1}
+\end{equation}
+where precision, $P_c$, is the fraction of cells predicted as $c$ that truly are $c$, and recall, $R_c$, is the fraction of true $c$ cells predicted as $c$. Macro-F1 also averages $\mathrm{F1}_c$ over the four classes with equal weight, such that a poorly classified minority class still pulls the score down even when overall accuracy is high.
+
+To evaluate how the classifier performs on fields with irregular rotation, we grouped each 2023 test observation by the crop history that led up to it, using the same three regimes as the rotation analysis: monoculture if the field grew the same crop for seven or more years in a row, or spent at least 80\% of its years in corn or in soybean; regular if its alternation score was at least 0.7 and its pattern distance at most three; and irregular otherwise. These closely mirror the rule of Section~\ref{sec:method-rotation}, but are computed from the years before 2023 rather than from 2015--2024, so a cell's regime here can differ from its class on the rotation map.
+
+\clearpage\section{Results}\label{sec:results}
+
+\subsection{Seasonal crop signatures}\label{sec:result-phenology}
+
+\begin{figure}[H]
+\centering\includegraphics[width=\linewidth]{rewrite/figures/phenology.pdf}
+\caption{Seasonal NDVI curves fitted to pooled crop--week spatial means, 2008--2025. Lines show posterior mean curves; shading spans the 5th--95th posterior predictive percentiles. The shaded bands describe variation among regional weekly means, not the spread among fields. Peak labels refer to the fitted mean. The displayed window excludes winter wheat's preceding autumn growth.}
+\label{fig:phenology}
+\end{figure}
+
+From the fitted HSGP curves in Figure~\ref{fig:phenology}, we can see that timing, not magnitude, is what separates the two summer crops - corn and soybean. The curves describe only the observed spring-to-autumn window; wheat's autumn establishment and winter dormancy fall outside it.
+
+\begin{table}[!htbp]
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+& \multicolumn{3}{c}{Peak DOY} \\
+\cmidrule(lr){2-4}
+Crop & Mean (SD) & Median [IQR] & Range \\
+\midrule
+Corn & 211.1 (11.2) & 210.0 [205.3, 219.8] & 184--231 \\
+Soybean & 220.4 (7.8) & 221.5 [215.0, 223.8] & 207--238 \\
+Winter wheat & 149.6 (32.2) & 140.5 [129.5, 150.8] & 114--231 \\
+\bottomrule
+\end{tabular}
+\par\medskip
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+& \multicolumn{2}{c}{Peak NDVI} & \multicolumn{2}{c}{Green-up slope (NDVI / 30 d)} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Crop & Mean & Max & Mean (SD) & Median [IQR] \\
+\midrule
+Corn & 0.938 & 0.954 & 0.075 (0.008) & 0.074 [0.072, 0.080] \\
+Soybean & 0.943 & 0.958 & 0.069 (0.006) & 0.068 [0.065, 0.073] \\
+Winter wheat & 0.821 & 0.846 & 0.055 (0.023) & 0.054 [0.042, 0.069] \\
+\bottomrule
+\end{tabular}
+\caption{Per-year phenological features computed from each crop's raw weekly mean NDVI, summarized across 18 years (2008--2025). IQR denotes the 25th and 75th percentiles across years. These are computed directly from the weekly means, not from the fitted HSGP curves.}
+\label{tab:year-features}
+\end{table}
+
+The year-by-year features in Table~\ref{tab:year-features} tell a consistent story. Corn's median peak falls at DOY 210 and soybean's at DOY 221.5, a gap of about 11 days, while their peak NDVI is nearly identical (0.938 versus 0.943). Corn also greens up slightly faster than soybean, and both crops are consistent from year to year. Winter wheat, however, peaks much earlier, at a median of DOY 140.5 (around May 20). Its large standard deviation also comes from one or a few unusually late years, which more likely reflect other green vegetation within mixed 250 m pixels than the wheat itself.\footnote{The same late years likely also explain why wheat's green-up slope varies far more between years than corn's or soybean's, since a late peak spreads the same rise in NDVI over a longer period.}
+
+\begin{table}[!htbp]
+\centering\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Crop & RMSE & MAE & 50\% coverage & 90\% coverage & Mean CRPS \\
+\midrule
+Corn & 0.0194 & 0.0146 & 59.4\% & 90.1\% & 0.0107 \\
+Soybean & 0.0183 & 0.0141 & 56.6\% & 91.2\% & 0.0101 \\
+Winter wheat & 0.0232 & 0.0184 & 51.4\% & 91.0\% & 0.0131 \\
+\bottomrule
+\end{tabular}
+\caption{In-sample fit of the HSGP curves ($n=535$ crop--week means per crop). Coverage is the share of observations inside the stated posterior predictive band. The continuous ranked probability score (CRPS) rewards predictive distributions that are both accurate and sharp; lower is better.}
+\label{tab:fit}
+\end{table}
+
+Table~\ref{tab:fit} summarizes training goodness-of-fit. The in-sample root mean squared error (RMSE) is around 0.02 NDVI for all three crops. Since these checks use the same data the models were fit to, they describe fit to regional averages - they do not establish goodness-of-fit on out-of-sample years or fields.
+
+\FloatBarrier\subsection{Crop-history patterns}\label{sec:result-rotation}
+
+\begin{table}[!htbp]
+\centering\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+& \multicolumn{2}{c}{Raw labels} & \multicolumn{2}{c}{Smoothed labels} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Class & Share & Area (km$^2$) & Share & Area (km$^2$) \\
+\midrule
+Regular rotation & 28.15\% & $\approx$182,000 & 27.36\% & $\approx$177,000 \\
+Monoculture & 6.04\% & $\approx$39,000 & 3.90\% & $\approx$25,000 \\
+Irregular & 65.81\% & $\approx$425,000 & 68.74\% & $\approx$444,000 \\
+Total eligible & 100\% & $\approx$646,000 & 100\% & $\approx$646,000 \\
+\bottomrule
+\end{tabular}
+\caption{Areal statistics by rotation class for the 2,084,112 eligible cells, 2015--2024. Areas are cell counts multiplied by the area of one 556.7 m grid cell (0.31 km$^2$) and rounded to the nearest thousand. They describe the analysis grid, not field acreage, and include the 3.17\% of eligible cells outside the 13 state polygons.}
+\label{tab:rotation}
+\end{table}
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.9\linewidth]{rewrite/figures/rotation.pdf}
+\caption{Crop-history classes and their sensitivity to the rule. (a) The smoothed 2015--2024 class map covers 2,084,112 eligible cells in the enclosing raster footprint, including cells outside the 13 state polygons. Cell spacing is 556.7 m (NAD83 / Conus Albers, EPSG:5070); gray marks excluded cells. (b) Share of eligible cells labeled regular before smoothing, across alternation thresholds and mismatch allowances. The outlined cell marks the primary rule. Eligibility and the monoculture rule are held fixed.}
+\label{fig:rotation}
+\end{figure}
+
+Under the primary rule, regular corn-soybean rotation accounts for 27.4\% of eligible cells after smoothing, monoculture for 3.9\%, and irregular histories for 68.7\%, which can be seen summarized in Table 4. Before smoothing, the shares are 28.2\%, 6.0\%, and 65.8\%. Smoothing removes about a third of the monoculture cells, which suggests that many of them are isolated cells surrounded by rotated or irregular neighbors.
+
+The regular share depends heavily on how strictly ``regular'' is defined, which is observed in Figure~\ref{fig:rotation}b. Relaxing the alternation threshold from 0.70 to 0.50 and allowing six mismatches instead of three more than doubles it, from 28.2\% to 60.3\%. Allowing extra mismatches matters more than lowering the alternation threshold: at an alternation threshold of 0.70, going from three to six mismatches adds 11.2 points, whereas at three mismatches, going from 0.70 to 0.50 adds 6.6 points. The monoculture share stays at 6.0\% across the entire grid, since the monoculture rule depends only on run length and crop share, not on the alternation or mismatch thresholds. I.e., the persistence axis and the alternation axis are independent of each other, and the large irregular class is where the definitional uncertainty lives.
+
+Since about two-thirds of eligible cells are labeled irregular, it is worth being clear about what that label means. An irregular history can reflect a repeated multi-crop sequence - e.g., corn-corn-soybean - an interruption by another crop, or an error in one year's CDL label; it does not by itself indicate poor management.
+
+\begin{figure}[H]
+\centering\includegraphics[width=0.72\linewidth]{../figures/task2/task2__markov_corn_soy_other.png}
+\caption{Year-to-year crop transition probabilities, pooled over the eligible cells and the nine pairs of consecutive years in 2015-2024. Each row gives the probability of next year's crop given this year's crop (Equation~\ref{eq:markov}) and sums to 1.}
+\label{fig:markov}
+\end{figure}
+
+The transition matrix in Figure~\ref{fig:markov} shows which of these departures are most common. And we can see that switching is the most likely move from either main crop: a corn year is followed by soybean 55.4\% of the time, and a soybean year by corn 60.0\% of the time. However, neither switch is close to certain - corn is followed by corn 31\% of the time, compared with 24\% for soybean following soybean, so corn is the crop more likely to be planted two years in a row. This is the main reason soybean$\to$corn is the more reliable of the two switches (1.08 times as likely as corn$\to$soybean). Corn and soybean years are also followed by another crop 14\% and 16\% of the time, respectively, and about one in five pairs (19.3\%) starts from a year of another crop. Once a cell is in another crop, there is no strong pull in any direction: the next year is corn, soybean, or another crop with similar probabilities (0.34, 0.30, and 0.36). Every pair that is not a corn-soybean switch is therefore either a repeat, more often of corn than of soybean, or a move into or out of another crop, and these are the moves that push a cell's history away from regular rotation. Because the matrix looks back only one year, it cannot separate a deliberate corn-corn-soybean rotation from corn that is repeated irregularly, since both appear as a mix of corn$\to$corn and corn$\to$soybean pairs.
+
+Spatially, we can see in Figure~\ref{fig:rotation}a, that regular rotation is concentrated in a continuous band through the center of the footprint, while irregular histories dominate its northern portion and outer margins, and monoculture appears mostly in clusters along the western and southern edges. We did not formally test these patterns against county boundaries, surface water, or soils, so we can describe them only visually.
+
+\FloatBarrier\subsection{Wet and dry soil conditions}\label{sec:result-moisture}
+
+\begin{figure}[H]
 \centering\includegraphics[width=\linewidth]{rewrite/figures/moisture.pdf}
-\caption{Mean moisture percentile by state and crop during the two selected windows. Each point averages posterior predictive CDF scores over the group's cell--week rows. Lower values indicate drier conditions relative to the 2015--2021 weekly reference; higher values indicate wetter conditions. The dashed line marks the reference distribution's median percentile, not an event-detection threshold. These are summaries of the sampled crop-history footprint, not area-weighted estimates of fields affected.}
+\caption{Mean moisture percentile by state and crop during the two event windows. Each point averages the posterior predictive CDF values over the group's cell-weeks. Lower values indicate drier conditions relative to the 2015-2021 weekly reference, and higher values wetter conditions. The dashed line marks the reference median (0.5), not an event-detection threshold. These are summaries of the sampled crop-history footprint, not area-weighted estimates of fields affected.}
 \label{fig:moisture}
 \end{figure}
 
-\input{rewrite/sections/classification}
+In Figure~\ref{fig:moisture}, we can see that the two windows look very different. In April-July 2019, the mean moisture percentile sat above the reference median for both corn and soybean across the study states, meaning that the surface soil under these crops was, on average, wetter than usual for that time of year. Since the figure shows only these averages, we also counted how often individual cell-weeks were unusually wet - i.e., had a $z$-score above 1.5 (Section~\ref{sec:method-moisture}), meaning soil moisture more than one and a half standard deviations above the usual value for that cell and week. In Iowa, 17.75\% of the 2.9 million corn cell-weeks crossed this threshold, compared with roughly 7\% we would expect in a typical season if soil moisture varied normally around its usual value. These values describe relative surface wetness; identifying flooded fields would require separate inundation observations.
 
-\begin{figure}[htbp]
+In June-August 2022 the signal reversed, but unevenly. Nebraska soybean had a mean moisture percentile of 0.24, and 40.54\% of its 947,648 cell-weeks fell below the 10th percentile of the reference distribution. North Dakota corn, by contrast, averaged 0.52, essentially at the reference median, so the dry signal was far from uniform across the region. The most extreme stratum was Kentucky's winter wheat/soybean double crop, with 41.96\% of its 49,543 cell-weeks below the 10th percentile. Since these are double-crop fields, the soybean planted after wheat harvest would have been establishing during this window.
+
+The two events also differ in how far they stand out from the reference distribution. The median percentile across all cell-weeks was 0.817 in 2019 and 0.292 in 2022, yet the share of cell-weeks with a two-sided predictive tail probability below 0.05 was only 0.2\% in 2019 compared with 4.9\% in 2022. Part of this difference is by design: 2019 is one of the seven reference years, so its own wet observations widen and shift the reference distribution it is compared against, dampening its anomaly. 2022 lies outside the reference period and receives no such dampening. We treat both events as retrospective case studies for this reason.
+
+Differences among crop strata reflect where each crop is grown as much as how that crop experienced the conditions, so they should not be read as differences in crop-specific water stress.
+
+\FloatBarrier\subsection{Crop classification}\label{sec:result-classifier}
+
+\begin{table}[!htbp]
+\centering\small\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Features & $n$ & Accuracy & Macro F1 & F1 Other & F1 Corn & F1 Soy & F1 Wheat \\
+& & (\%) & & & & & \\
+\midrule
+CDL history & 19 & 80.59 & 0.808 & 0.903 & 0.727 & 0.753 & 0.849 \\
+CDL + NDVI & 34 & \textbf{82.33} & \textbf{0.824} & \textbf{0.906} & 0.749 & \textbf{0.763} & 0.881 \\
+CDL + SMAP & 23 & 80.66 & 0.809 & 0.903 & 0.728 & 0.754 & 0.849 \\
+CDL + NDVI + SMAP & 38 & 82.26 & 0.824 & 0.904 & \textbf{0.750} & 0.760 & \textbf{0.882} \\
+\bottomrule
+\end{tabular}
+\caption{Feature-group comparison on the balanced 2022 validation sample ($n=500{,}000$). All configurations used the same training and validation years. These are validation results, not results on the 2023 test set.}
+\label{tab:ablation}
+\end{table}
+
+Table~\ref{tab:ablation} compares the four feature configurations on the 2022 validation set. Crop history alone already achieves 80.6\% accuracy, which reflects how strongly last year's crop predicts this year's in a rotation-dominated landscape. Adding NDVI raises accuracy by 1.74 percentage points to 82.3\%, and improves every class. The largest gain is for winter wheat, whose F1 rises from 0.849 to 0.881, consistent with its distinctly earlier peak in Section~\ref{sec:result-phenology}. Corn and soybean gain about 0.02 and 0.01 in F1, respectively. Adding SMAP to crop history changes accuracy by only 0.07 points, and the full model scores slightly below CDL plus NDVI. These are differences on a single validation year; we did not test them for statistical significance, and their ordering could differ in other years. We carried the full 38-feature model forward to the test year. Its validation accuracy is within 0.07 points of CDL plus NDVI, and keeping the SMAP features let us see how much the fitted model actually used them.
+
+\begin{figure}[H]
 \centering\includegraphics[width=\linewidth]{rewrite/figures/prediction.pdf}
-\caption{Full-model results for the balanced 2023 test sample. (a) Confusion-matrix entries are row percentages; each CDL reference class contains 125,000 samples. Wheat denotes winter wheat (code~24); Other combines the remaining selected CDL labels. (b) Accuracy differs across regimes assigned from preceding crop history. The groups have different class mixtures, so their accuracy gaps do not isolate the effect of rotation complexity.}
+\caption{Full-model results for the balanced 2023 test sample. (a) Confusion matrix as row percentages; each CDL reference class contains 125,000 samples. Wheat denotes winter wheat (code 24); Other combines the remaining selected CDL labels. (b) Accuracy by historical regime, assigned from each observation's preceding crop history. The regimes have different class mixtures, so their accuracy gaps do not isolate the effect of rotation complexity.}
 \label{fig:prediction}
 \end{figure}
 
-\section{What the combined results support}
-\label{sec:discussion}
-Seasonal NDVI has the clearest measured value for crop classification in this study. Its improvement over crop history agrees with the distinct timing seen in the regional curves, although the experiment does not identify which timing feature accounts for the gain. Crop history remains a useful baseline, but its interpretation depends on the sequence rule and the crop classes represented. The rotation sensitivity and errors by regime therefore point to the need to evaluate performance across crop histories, with class composition reported alongside accuracy.
+On the 2023 test sample, the full model achieved 79.21\% accuracy and a macro-F1 of 0.791, about three percentage points below its validation accuracy. Per-class F1 was 0.893 for Other, 0.813 for winter wheat, 0.735 for soybean, and 0.726 for corn. The confusion matrix in Figure~\ref{fig:prediction}a shows that the largest error is soybean predicted as corn: 30,935 of the 125,000 soybean observations (24.7\%), compared with 9,894 corn observations predicted as soybean (7.9\%). The asymmetry suggests that when the model is uncertain between the two summer crops, it leans toward corn. A further 10.1\% of corn was predicted as winter wheat and 9.8\% of wheat as corn, so even the crop with the most distinctive calendar is not cleanly separated in every case.
 
-The moisture analysis serves a different purpose: it describes departures from usual seasonal conditions. The small classification gain from the selected SMAP features applies to that feature set and validation year. Evaluating moisture for crop-condition monitoring would require a defined outcome and an evaluation designed around it.
+Accuracy also drops as crop history becomes less predictable, as seen in Figure~\ref{fig:prediction}b: 95.55\% for monoculture histories (n = 124,318), 87.41\% for regular rotation, and 70.92\% for irregular histories. This is the expected pattern, since the CDL history features carry most of the information when a field's history is regular, and when it is not, the model has to rely on the season itself. The three groups have different class compositions, however, so the gaps do not isolate the effect of rotation complexity alone. The regular group in particular consists almost entirely of corn and soybean: there, corn and soybean F1 were 0.879 and 0.907, while the four-class macro F1 was only 0.559 - the few wheat and Other cells in that group were poorly classified.
 
-\subsection{Limits of the evidence}
-Three issues matter for interpreting or extending these results. First, the units are coarser than individual fields. Regional NDVI averages hide local variability, resampled moisture cells share information, and annual CDL errors can alter apparent crop sequences. Model agreement with CDL therefore measures consistency with a reference product, not independent field accuracy. A spatially separated evaluation would be needed to assess transfer to new locations \citep{roberts2017cv}.
+\FloatBarrier\section{Discussion}\label{sec:discussion}
 
-Second, the current classifier's feature construction is not fully consistent across splits. Neighborhood summaries are built after target-class sampling, with unsampled locations filled as zero; consequently, the sampling process can influence predictors. Historical NDVI summaries also have different observation coverage in training and test construction. For SMAP, training uses historical percentile references when available, while the test builder falls back to the current row's seasonal percentiles. In addition, the fixed eligible mask uses 2013--2022 labels, including years later than some training samples. These findings warrant a common feature builder with explicit time cutoffs and a repeat evaluation before deployment. We have not measured their effect on the reported scores.
+This work used three CropSmart data products, the CDL, MODIS NDVI, and SMAP soil moisture, to work through the four tasks of the NAFSI Track 1 challenge across the Corn Belt. We characterized the seasonal NDVI curves of corn, soybean, and winter wheat with an HSGP, and found that the crops are separated by when they peak rather than how green they get. We identified regular corn-soybean rotation from ten-year CDL histories with a transparent rule, and found that the share of regular rotation ranges from about 28\% to 60\% depending on how strictly ``regular'' is defined. We scored soil moisture against a 2015-2021 baseline with a conjugate Bayesian model that accounts for the short SMAP record, which showed broadly wet conditions in spring 2019 and drier, more uneven conditions in summer 2022. And we trained a LightGBM classifier on CDL history, NDVI, and SMAP features that reached 79.2\% accuracy on the 2023 test year, with NDVI adding to what crop history alone provides and SMAP adding almost nothing.
 
-Third, the moisture comparison is retrospective and uses a short reference period. The inclusion of 2019 in that reference can attenuate its anomalies. Neither event analysis has independent labels for flood extent, drought severity, or crop damage, so the scores describe unusual moisture rather than validated detection performance. A prospective study would require a reference ending before each event and outcome data suited to the intended claim.
+\section{Limitations}\label{sec:limits}
 
-\section{Conclusion}
-Seasonal NDVI added more to classification based on crop history than the selected soil-moisture features in the reported validation comparison. The descriptive analyses help interpret these inputs while showing the limits imposed by aggregation and classification rules. The next test is to construct features consistently at explicit time cutoffs and evaluate them across years and unseen locations. Moisture monitoring needs its own crop-condition outcome and validation data.
+Despite these results, our implementation still has several limitations worth acknowledging.
 
-\section*{Code and reproducibility}
-Code, notebooks, and saved results are available in the \href{https://github.com/sardorsob/GeoCrop-Spatiotemporal-Modeling}{GeoCrop repository}. This revision redraws figures from saved results without refitting models. Build instructions and figure-source checksums are in \texttt{artifacts/reports/rewrite/}. Recreating the analyses also requires the downloaded input data and their spatial metadata.
+Every unit in this study is coarser than an individual field. The phenology curves average many fields into one regional mean per week, so they describe the typical season rather than the range of seasons among fields; the shaded bands in Figure~\ref{fig:phenology} represent variation in regional means, not field-to-field spread - NDVI pixels at 250 m often contain more than one crop, and moisture cells share a single 9 km value. Above all, every label in this study comes from the CDL, which has errors of its own. A single mislabeled year can move a cell between rotation classes, and the classifier's accuracy measures agreement with the CDL, not with what was actually planted.
 
-\raggedright
-\bibliographystyle{unsrtnat}
+Pooling 18 years into one curve per crop treats every year as a draw around the same season. The pooled curve therefore averages over planting-date shifts that are themselves informative, and the model cannot tell us how much the season moves from year to year.
+
+There is no ground truth for which fields are ``regular,'' and our headline share of 27\% depends on thresholds we chose; under looser but still reasonable definitions, it reaches 60\%. The three-class scheme also treats any non-alternating sequence as irregular, so common structured rotations such as corn-corn-soybean or wheat-soybean double cropping are grouped with genuinely erratic histories.
+
+With SMAP beginning in 2015, each cell-week has at most seven reference years. The NIG model accounts for this uncertainty, but it cannot create the long climatology that a robust anomaly needs. Including 2019 in its own reference also dampens that event's anomaly, as seen in the much smaller share of extreme 2019 observations. We also have no independent observations of flood extent, drought severity, or crop damage, so the moisture scores describe unusual conditions rather than validated detections of agricultural impact.
+
+Balanced sampling ensures that every class is evaluated fairly, but it also means our accuracy does not reflect a map in which corn and soybean cover far more area than wheat. An area-weighted evaluation would likely produce a different overall accuracy and different error patterns.
+
+\section{Suggested Future Work}\label{sec:future}
+
+The most direct improvement to Task 1 would be to replace the pooled curve with a hierarchical GP, in which each year's curve is a deviation from a shared crop-level curve. This would let the model learn how much the season shifts from year to year, and turn peak timing into a per-year estimate with its own uncertainty, which could then be related to spring moisture or temperature. Because the HSGP scales linearly with N , the same structure could be extended to individual pixels or counties. Comparing the GP against a parametric model, would also show whether the added flexibility is earned.
+
+As an extension of the rule-based classes, we also computed a Dirichlet-Multinomial posterior for each cell's transition probabilities, giving a continuous posterior probability of regular rotation and its uncertainty. However, we did not use it in the reported classification. Mapping that probability, rather than hard classes, would directly show which cells are confidently regular and which sit near the boundary, which is exactly where the sensitivity analysis shows the shares move. Extending the classes to recognize structured multi-crop rotations, and using field boundaries such as the USDA Crop Sequence Boundaries in place of grid cells, would make the results interpretable at the level where rotation decisions are actually made.
+
+The challenge asks whether rotation regularity is associated with county boundaries, proximity to water, or soil type. Joining the class map to county polygons, hydrography, a soils database, and irrigation extent, and modeling the probability of regular rotation as a function of these covariates, would turn the visual patterns in Figure~\ref{fig:rotation}a into a tested result.
+
+For prospective use, the reference period should exclude the event year - e.g., through a leave-one- year-out climatology. A longer reference could come from a reanalysis product such as ERA5, which extends decades before SMAP, and SMAP L4's root-zone layer may better reflect the water available to established crops than the surface layer. Most importantly, the anomalies should be validated against independent outcomes such as drought monitor categories, crop condition reports, or prevented-planting acreage.
+
+\FloatBarrier
+\begingroup\raggedright
+\bibliographystyle{plainnat}
 \bibliography{references}
+\endgroup
+\clearpage
+\appendix
+\section*{Appendix}
+\section{HSGP Implementation}\label{app:hsgp}
+The HSGP models of Section~\ref{sec:method-phenology} were implemented in NumPyro and JAX. Before fitting, DOY was centered at its mean $\bar{t}$. The HSGP approximates the GP of Equation~\ref{eq:kernel} with $m=25$ basis functions defined on the interval $[-L,L]$, where
+\begin{equation}
+L=1.3\max_t|t-\bar{t}|.
+\label{eq:boundary}
+\end{equation}
+The approximation is only accurate away from the boundaries $\pm L$, so setting $L$ to $1.3\times$ the observed range leaves a margin beyond the observed season and keeps the curve from being distorted near the start and end of the window \citep{riutort2023hsgp}. Because the season is a single smooth hump, with a length-scale prior centered on 25 days, 25 basis functions were enough to represent the curve.\footnote{\citet{riutort2023hsgp} recommend choosing $m$ and $L$ jointly based on the expected length-scale relative to the data range; longer length-scales need fewer basis functions.}
+
+The posterior was approximated with SVI, using a mean-field normal guide (NumPyro's \texttt{AutoNormal}), which approximates each latent parameter with an independent normal distribu- tion. We optimized the evidence lower bound (ELBO) with Adam at a learning rate of 0.005 for 8,000 steps per crop. Posterior predictive curves were generated from 2,000 samples on a fine DOY grid via NumPyro's \texttt{Predictive} interface, and the peak DOY and peak NDVI reported in Section~\ref{sec:result-phenology} are taken from the posterior mean curve.
+
+The goodness-of-fit statistics of Table~\ref{tab:fit} were also computed in-sample. The 50\% and 90\% coverage are the shares of the 535 observed crop-week means that fall inside the corresponding central posterior predictive interval - for a well-calibrated model these should be close to 50\% and 90\%, respectively.
+
+\section{Normal--Inverse-Gamma Anomaly Score}\label{app:nig}
+For each cell and ISO week, let $\bar{x}$, $s^2$, and $n\leq7$ denote the sample mean, sample variance, and number of reference observations from 2015--2021. Under the NIG prior of Equation~\ref{eq:nig}, the posterior after observing the reference years is NIG with parameters \citep{murphy2007conjugate}
+\begin{align}
+\mu_n&=\frac{\lambda_0\mu_0+n\bar{x}}{\lambda_0+n}, & \lambda_n&=\lambda_0+n,\label{eq:nig-mean}\\
+\alpha_n&=\alpha_0+\frac{n}{2}, & \beta_n&=\beta_0+\frac{(n-1)s^2}{2}+\frac{\lambda_0n(\bar{x}-\mu_0)^2}{2(\lambda_0+n)}.\label{eq:nig-var}
+\end{align}
+$\mu_n$ is a precision-weighted average of the prior mean and the cell's own reference mean, and $\beta_n$ grows with both the cell's own spread and its disagreement with the prior mean.
+
+The hyperparameters were set through empirical Bayes methods:
+\begin{itemize}
+\item $\mu_0$ is the mean of the cell-level reference means for that ISO week across the study region.
+\item $\beta_0$ is set from the regional median of the cell-level reference variances for that week, so that the prior's expected variance matches a typical cell.
+\item $\lambda_0=1$ gives the prior mean the weight of a single additional reference year.
+\item $\alpha_0=2$ gives the prior variance the weight of roughly four additional observations ($2\alpha_0$), and is the smallest integer for which the prior mean of the variance is finite.
+\end{itemize}
+For each event cell--week, the moisture percentile is the predictive CDF evaluated at the observed value, $F(x_{\mathrm{obs}})$, and the two-sided tail probability reported in Section~\ref{sec:result-moisture} is $2\min\{F(x_{\mathrm{obs}}),1-F(x_{\mathrm{obs}})\}$. The ordinary $z$-score of Equation~\ref{eq:z}, clipped to $[-5,5]$, was computed alongside for comparison and used for the $z>1.5$ wetness counts.
+
+\section{Classifier Features and Training}\label{app:classifier}
+
+Table~\ref{tab:features} lists the 38 features used by the full classifier. CDL history features use the years preceding the target year (up to ten for the sequence metrics), NDVI features use the target year's weekly observations unless marked as historical, and SMAP features use the target year's growing season.
+
+{\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.11\linewidth}>{\raggedright\arraybackslash}p{0.43\linewidth}>{\raggedright\arraybackslash}p{0.38\linewidth}@{}}
+\caption{Features used by the full classifier (configuration CDL + NDVI + SMAP in Table~\ref{tab:ablation}). CDL history features use the years before the target year; NDVI and SMAP features use the target year's season unless noted.}\label{tab:features}\\
+\toprule
+Group & Feature & Description \\
+\midrule
+\endfirsthead
+\multicolumn{3}{l}{\tablename\ \thetable\ continued}\\
+\toprule
+Group & Feature & Description \\
+\midrule
+\endhead
+\midrule\multicolumn{3}{r}{Continued on next page}\\\endfoot
+\bottomrule\endlastfoot
+
+CDL (19) & \texttt{cdl\_t1, ..., cdl\_t5} & CDL class 1, 2, 3, 4, and 5 years before the target year (one feature each) \\
+
+& \texttt{n\_corn\_to\_soy} & Number of corn $\to$ soybean transitions in the cell's history \\
+
+& \texttt{n\_soy\_to\_corn} & Number of soybean $\to$ corn transitions \\
+
+& \texttt{n\_corn\_corn} & Number of corn $\to$ corn transitions (corn repeated) \\
+
+& \texttt{n\_soy\_soy} & Number of soybean $\to$ soybean transitions (soybean repeated) \\
+
+& \texttt{time\_since\_last\_corn} & Years since the cell last grew corn \\
+
+& \texttt{time\_since\_last\_soy} & Years since the cell last grew soybean \\
+
+& \texttt{frac\_years\_corn} & Fraction of history years in corn \\
+
+& \texttt{frac\_years\_soy} & Fraction of history years in soybean \\
+
+& \texttt{max\_run\_length} & Longest run of the same crop in consecutive years \\
+
+& \texttt{alternation\_score} & Fraction of corn/soybean year pairs that switch crops (Equation~\ref{eq:alternation}) \\
+
+& \texttt{pattern\_distance} & Mismatches against the closer perfect corn--soybean alternation (Equation~\ref{eq:distance}) \\
+
+& \texttt{sequence\_entropy} & Shannon entropy of the crop sequence, i.e., how diverse the cell's crop history is \\
+
+& \texttt{neigh\_frac\_corn} & Fraction of neighboring cells in corn \\
+
+& \texttt{neigh\_frac\_soy} & Fraction of neighboring cells in soybean \\
+
+NDVI (15) & \texttt{ndvi\_base} & Lowest NDVI of the season \\
+
+& \texttt{ndvi\_peak} & Highest NDVI of the season \\
+
+& \texttt{ndvi\_amplitude} & Difference between the peak and base NDVI \\
+
+& \texttt{ndvi\_mean} & Mean NDVI over the season \\
+
+& \texttt{ndvi\_integral} & NDVI accumulated over the season (area under the curve) \\
+
+& \texttt{ndvi\_peak\_week} & Week in which NDVI peaks \\
+
+& \texttt{ndvi\_greenup\_week} & Week in which green-up begins \\
+
+& \texttt{ndvi\_greenup\_slope} & Rate at which NDVI rises during green-up \\
+
+& \texttt{ndvi\_early\_mean} & Mean NDVI in the early season \\
+
+& \texttt{ndvi\_mid\_mean} & Mean NDVI in the middle of the season \\
+
+& \texttt{ndvi\_late\_mean} & Mean NDVI in the late season \\
+
+& \texttt{ndvi\_peak\_hist\_mean} & The cell's average peak NDVI in other years \\
+
+& \texttt{ndvi\_peak\_hist\_std} & Year-to-year standard deviation of the cell's peak NDVI \\
+
+& \texttt{ndvi\_peak\_week\_hist\_mean} & The cell's average peak week in other years \\
+
+& \texttt{ndvi\_peak\_week\_hist\_std} & Year-to-year standard deviation of the cell's peak week \\
+
+SMAP (4) & \texttt{smap\_mean\_gs} & Mean soil moisture over the growing season \\
+
+& \texttt{smap\_spring\_sm} & Mean soil moisture in spring \\
+
+& \texttt{smap\_pct\_wet\_weeks} & Fraction of weeks wetter than the 80th percentile of the reference \\
+
+& \texttt{smap\_pct\_dry\_weeks} & Fraction of weeks drier than the 20th percentile of the reference \\
+
+\end{longtable}}
+
+All four configurations in Table~\ref{tab:ablation} were trained with the same LightGBM settings: a multiclass objective over the four classes, a learning rate of 0.05, a maximum tree depth of seven, 63 leaves per tree, and a maximum of 500 boosting rounds, with early stopping after 50 rounds without improvement in validation loss on 2022. The model evaluated on 2023 was trained on 2013-2021 with the same early-stopping rule on 2022 - 2022 was not added to the training data.
+
 \end{document}

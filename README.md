@@ -11,7 +11,8 @@ patterns, soil moisture anomalies, and crop-type prediction.
 
 > **Read the main paper:**
 > [Reading the Corn Belt: Crop History, Vegetation Timing, and Soil Moisture](Reading_the_Corn_Belt.pdf)
-> presents all four analyses in 10 pages, including references.
+> presents the revised analyses and expanded methodology in 17 pages, including
+> references and technical appendices.
 > [LaTeX source](artifacts/reports/Reading_the_Corn_Belt.tex),
 > [plain text](artifacts/reports/Reading_the_Corn_Belt.txt), and
 > [build instructions](artifacts/reports/rewrite/README.md) accompany it.
@@ -52,7 +53,7 @@ analysis grid, EPSG:5070 Albers projection):
 ```bash
 # 1. Clone the repository
 git clone <repo-url>
-cd GeoCrop-Spatiotemporal-Modeling
+cd Nafsi-Corn-Belt-Modeling
 
 # 2. Create and activate a virtual environment
 python -m venv .venv
@@ -216,7 +217,7 @@ results. Nothing in this folder is hand-edited.
 ## Directory Structure
 
 ```
-GeoCrop-Spatiotemporal-Modeling/
+Nafsi-Corn-Belt-Modeling/
 │
 ├── README.md                          # This file
 ├── requirements.txt                   # Pinned Python dependencies

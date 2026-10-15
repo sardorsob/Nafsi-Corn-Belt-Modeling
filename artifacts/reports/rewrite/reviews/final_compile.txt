@@ -1,33 +1,36 @@
+Final compiler pass — revised manuscript, 2026-10-14
+
  because "Reading_the_Corn_Belt.aux" changed ...
 (Reading_the_Corn_Belt.tex
 LaTeX2e <2021-11-15> patch level 1
 L3 programming layer <2022-02-24> (article.cls
 Document Class: article 2021/10/04 v1.4n Standard LaTeX document class
-(size11.clo)) (geometry.sty (keyval.sty) (ifvtex.sty (iftex.sty))) (fontenc.sty
-(t1lmr.fd)) (lmodern.sty) (microtype.sty (etoolbox.sty) (microtype-xetex.def)
+(size10.clo)) (geometry.sty (keyval.sty) (ifvtex.sty (iftex.sty))) (fontenc.sty
+(t1lmr.fd)) (mathptmx.sty) (microtype.sty (etoolbox.sty) (microtype-xetex.def)
 (microtype.cfg)) (graphicx.sty (graphics.sty (trig.sty) (graphics.cfg)
 (xetex.def))) (amsmath.sty
 For additional information on amsmath, use the `?' option.
 (amstext.sty (amsgen.sty)) (amsbsy.sty) (amsopn.sty)) (amssymb.sty
-(amsfonts.sty)) (booktabs.sty) (array.sty) (natbib.sty) (caption.sty
-(caption3.sty)) (xcolor.sty (color.cfg)) (hyperref.sty (ltxcmds.sty)
-(pdftexcmds.sty (infwarerr.sty)) (kvsetkeys.sty) (kvdefinekeys.sty)
-(pdfescape.sty) (hycolor.sty) (letltxmacro.sty) (auxhook.sty) (kvoptions.sty)
-(pd1enc.def) (intcalc.sty) (etexcmds.sty) (puenc.def) (url.sty) (bitset.sty
-(bigintcalc.sty)) (atbegshi-ltx.sty)) (hxetex.def (stringenc.sty)
-(rerunfilecheck.sty (atveryend-ltx.sty) (uniquecounter.sty)))
-(l3backend-xetex.def) (Reading_the_Corn_Belt.aux) (ts1cmr.fd)
+(amsfonts.sty)) (booktabs.sty) (array.sty) (longtable.sty) (natbib.sty)
+(caption.sty (caption3.sty) (ltcaption.sty)) (placeins.sty) (float.sty)
+(xcolor.sty (color.cfg)) (hyperref.sty (ltxcmds.sty) (pdftexcmds.sty
+(infwarerr.sty)) (kvsetkeys.sty) (kvdefinekeys.sty) (pdfescape.sty)
+(hycolor.sty) (letltxmacro.sty) (auxhook.sty) (kvoptions.sty) (pd1enc.def)
+(intcalc.sty) (etexcmds.sty) (puenc.def) (url.sty) (bitset.sty (bigintcalc.sty)
+) (atbegshi-ltx.sty)) (hxetex.def (stringenc.sty) (rerunfilecheck.sty
+(atveryend-ltx.sty) (uniquecounter.sty))) (t1ptm.fd) (l3backend-xetex.def)
+(Reading_the_Corn_Belt.aux) (ts1cmr.fd)
 *geometry* driver: auto-detecting
 *geometry* detected driver: xetex
-(mt-cmr.cfg) (nameref.sty (refcount.sty) (gettitlestring.sty))
-(Reading_the_Corn_Belt.out) (Reading_the_Corn_Belt.out) (ot1lmr.fd) (omllmm.fd)
-(omslmsy.fd) (omxlmex.fd) (umsa.fd) (mt-msa.cfg) (umsb.fd) (mt-msb.cfg)
-(t1lmtt.fd) [1] (rewrite/sections/phenology_rotation [2] [3])
-(rewrite/sections/moisture [4] [5]) (rewrite/sections/classification [6]
-[7]) [8] [9] (Reading_the_Corn_Belt.bbl) [10] (Reading_the_Corn_Belt.aux) )
-Output written on Reading_the_Corn_Belt.xdv (10 pages, 51672 bytes).
+(mt-ptm.cfg) (nameref.sty (refcount.sty) (gettitlestring.sty))
+(Reading_the_Corn_Belt.out) (Reading_the_Corn_Belt.out) (ot1ztmcm.fd)
+(omlztmcm.fd) (omsztmcm.fd) (omxztmcm.fd) (ot1ptm.fd) (mt-msa.cfg) (mt-msb.cfg)
+(ts1ptm.fd) (t1lmtt.fd) [1] [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12]
+[13] [14] (Reading_the_Corn_Belt.bbl) [15] [16] [17] (Reading_the_Corn_Belt.aux
+) )
+Output written on Reading_the_Corn_Belt.xdv (17 pages, 103464 bytes).
 Transcript written on Reading_the_Corn_Belt.log.
 note: Running xdvipdfmx ...
-[1][2][3][4][5][6][7][8][9][10]299271 bytes written
-note: Writing `/Users/sobirov/Workspace/Projects/GeoCrop-Spatiotemporal-Modeling/artifacts/reports/build/Reading_the_Corn_Belt.pdf` (292.2568359375 KiB)
+[1][2][3][4][5][6][7][8][9][10][11][12][13][14][15][16][17]390534 bytes written
+note: Writing `/Users/sobirov/Workspace/Projects/GeoCrop-Spatiotemporal-Modeling/artifacts/reports/build/Reading_the_Corn_Belt.pdf` (381.380859375 KiB)
 note: Skipped writing 3 intermediate files (use --keep-intermediates to keep them)
