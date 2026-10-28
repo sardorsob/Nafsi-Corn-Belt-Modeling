@@ -1,397 +1,244 @@
-# GeoCrop Spatiotemporal Modeling
+# Reading the Corn Belt
 
 ## 2026 CropSmart Data Challenge — NAFSI Track 1
 
-A reproducible, end-to-end geospatial analysis and machine learning pipeline for
-agricultural resilience modeling across the U.S. Corn Belt (13 states). The
-project integrates three operational remote-sensing datasets — **USDA Cropland
-Data Layer (CDL)**, **MODIS NDVI**, and **NASA SMAP L4 Soil Moisture** — to
-answer four progressive research questions about crop phenology, rotation
-patterns, soil moisture anomalies, and crop-type prediction.
+This project studies what grows across the 13-state U.S. Corn Belt, when crops
+develop through the season, and how wet or dry their soils are. It combines
+annual USDA Cropland Data Layer (CDL) labels, weekly MODIS vegetation indices,
+and NASA SMAP soil moisture in four analyses: crop phenology, rotation, moisture
+anomalies, and crop classification. It describes crop conditions and agreement
+with CDL labels; it does not measure yield loss or recovery from extreme weather.
 
-> **Read the main paper:**
-> [Reading the Corn Belt: Crop History, Vegetation Timing, and Soil Moisture](Reading_the_Corn_Belt.pdf)
-> presents the revised analyses and expanded methodology in 17 pages, including
-> references and technical appendices.
-> [LaTeX source](artifacts/reports/Reading_the_Corn_Belt.tex),
-> [plain text](artifacts/reports/Reading_the_Corn_Belt.txt), and
-> [build instructions](artifacts/reports/rewrite/README.md) accompany it.
-> The dashboard reader uses the current paper.
-
----
+[Read the paper](Reading_the_Corn_Belt.pdf) for the methods, results, and technical
+appendices. The 17-page manuscript has an
+[editable LaTeX source](artifacts/reports/Reading_the_Corn_Belt.tex),
+[plain-text copy](artifacts/reports/Reading_the_Corn_Belt.txt), and
+[build guide](artifacts/reports/rewrite/README.md).
 
 ## Quick Start
 
-There are **two ways** to reproduce our results:
-
-| Path | Best for | What to do |
-|------|----------|------------|
-| **One-click orchestration** | Quick end-to-end recreation | Open `CropSmart_NAFSI_Track1_Template.ipynb` and run every cell top-to-bottom. It installs dependencies, downloads data, runs all four tasks, and displays key figures and tables. |
-| **Granular exploration** | Deep understanding of each step | Follow the [Environment Setup](#environment-setup) below, then open each task folder under `notebooks/` and run notebooks in numbered order (01 → 02 → 03 → …). |
-
----
+| To… | Start here |
+|-----|------------|
+| Explore the saved results | Run the [interactive dashboard](dashboard/README.md); no Python analysis or data download is needed. |
+| Examine the evidence | Read the [results summary](#key-results-summary) and its linked CSV/JSON tables. |
+| Reproduce an analysis | Follow [Environment Setup](#environment-setup), [Dataset Access](#dataset-access), and the ordered [task notebooks](#running-the-experiments). |
+| Edit the paper | Use the [paper build guide](artifacts/reports/rewrite/README.md). |
 
 ## Problem Description
 
-The CropSmart NAFSI Track 1 challenge poses four tasks, each building on shared
-geospatial data to characterise crop systems at the pixel level (~250 m–557 m
-analysis grid, EPSG:5070 Albers projection):
+The study covers Illinois, Indiana, Iowa, Kansas, Kentucky, Michigan, Minnesota,
+Missouri, Nebraska, North Dakota, Ohio, South Dakota, and Wisconsin. The analyses
+share data, but use different time windows and eligible-cell definitions.
 
-| Task | Research Question | Primary Datasets | Methodology |
-|------|-------------------|-------------------|-------------|
-| **1** | How do corn and soybean NDVI phenologies differ across the Corn Belt? | MODIS NDVI + CDL | Hilbert Space Gaussian Process (HSGP) for smooth, uncertainty-aware seasonal curves |
-| **2** | What spatial patterns of crop rotation exist over a 10-year CDL sequence? | CDL 2015–2024 | Four sequence metrics → hierarchical rule-based classification (regular / monoculture / irregular) + Bayesian Dirichlet–Multinomial |
-| **3** | Where and when did soil moisture anomalies occur during the 2019 Midwest Flood and 2022 Plains Drought? | SMAP L4 + CDL | Frequentist z-score + Bayesian Normal-Inverse-Gamma (NIG) conjugate posterior for robust anomaly detection |
-| **4** | Can we predict crop type from CDL history, NDVI phenology, and SMAP soil moisture? | CDL + NDVI + SMAP | LightGBM gradient-boosted classifier with temporal holdout, ablation study, and SHAP feature importance |
+| Task | Question | Method and scope |
+|------|----------|------------------|
+| **1 — Phenology** | When do corn, soybean, and winter wheat green up and peak? | A Hilbert space Gaussian process (HSGP), fitted with stochastic variational inference, describes pooled crop-level NDVI curves. Saved yearly summaries span 2008–2025. |
+| **2 — Rotation** | How common is regular corn–soybean rotation? | Rules use alternation, pattern distance, run length, and crop history over 2015–2024. Eligible cells have corn or soybean in at least five years. A separate Dirichlet–Multinomial model describes uncertainty in transitions. |
+| **3 — Moisture** | How unusual were soils during April–July 2019 and June–August 2022? | Weekly z-scores and a Normal–Inverse-Gamma (NIG) model compare moisture with a 2015–2021 reference, on the rotation-eligible footprint. |
+| **4 — Classification** | What do seasonal observations add to crop history? | LightGBM uses CDL history, NDVI, and SMAP features. Training uses 2013–2021, validation 2022, and testing 2023. Ablations compare four feature groups on validation data. |
 
----
+The rotation rule gives monoculture priority: at least seven consecutive years
+of one crop or an 80% dominant-crop share. Remaining cells are regular when
+corn–soy alternation is at least 0.70, pattern distance is at most three
+mismatches, and at least seven years are corn or soybean. Entropy describes
+sequence diversity; it is not a classification threshold. The mapped labels
+use a 3×3 majority filter; the threshold sweep uses unsmoothed labels.
 
 ## Environment Setup
 
-**Prerequisites:** Python 3.10–3.12, `pip`, and `git`.
+The analysis uses Python, JupyterLab, and the scientific/geospatial dependencies
+in [requirements.txt](requirements.txt). The file specifies version ranges and
+some unpinned packages, not a locked environment. Use Python 3.10–3.12 as a
+starting point; compatibility across all versions has not been established.
+
+From a local checkout:
 
 ```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd Nafsi-Corn-Belt-Modeling
-
-# 2. Create and activate a virtual environment
 python -m venv .venv
-
-# Linux / macOS:
 source .venv/bin/activate
-# Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-
-# 3. Install all dependencies (pinned versions in requirements.txt)
-pip install -r requirements.txt
-
-# 4. Register the src/ package so notebooks can import it
-pip install -e .
-```
-
-> **Windows + GDAL note:** If `rasterio` fails to install via pip, install
-> `rasterio` and `GDAL` from conda-forge first, then `pip install` the rest.
-
-> **NumPy 2 note:** On Python 3.13+, NumPy 2.x is required. The
-> `requirements.txt` handles this automatically with environment markers.
-
-After setup, verify with:
-
-```bash
-python -c "import src; import numpy; import pandas; import rasterio; print('All imports OK')"
-```
-
----
-
-## Dataset Access
-
-All three datasets are publicly available through the National Data Platform
-(NDP) and the CropSmart Digital Twin portal. No API keys or credentials are
-required for CDL or NDVI. SMAP requires a free NASA Earthdata login.
-
-| Dataset | Source | Resolution | Period Used |
-|---------|--------|------------|-------------|
-| **CDL** (Cropland Data Layer) | [USDA NASS CropScape](https://nassgeodata.gmu.edu/CropScape) | 30 m annual | 2015–2024 |
-| **MODIS NDVI** | [CropSmart Portal](https://cloud.csiss.gmu.edu/CropSmart/) | 250 m weekly composites | 2015–2024 (growing season) |
-| **SMAP L4** (Soil Moisture) | [CropSmart Portal](https://cloud.csiss.gmu.edu/CropSmart/) | 9 km weekly | 2015–2022 |
-| **TIGER/Line** (State/County boundaries) | [US Census Bureau](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html) | Vector | 2023 |
-
-**Automated download:** The data pipeline scripts handle downloading, stacking,
-and converting all datasets:
-
-```bash
-# Download raw GeoTIFFs (30–90 min depending on network)
-python scripts/download_data.py --dataset cdl
-python scripts/download_data.py --dataset ndvi
-python scripts/download_data.py --dataset smap
-
-# Stack into interim NetCDF files (5–10 min)
-python scripts/build_interim_data.py --dataset all
-
-# Convert to analysis-ready wide Parquet + JSON metadata (5–15 min)
-python scripts/process_interim_to_parquet.py --dataset all
-```
-
-For SMAP, set up NASA Earthdata credentials first:
-
-```bash
-python scripts/setup_earthdata_netrc.py
-```
-
-See `context/DATASETS.md` for full schemas, licensing, QA flags, and download
-details.
-
----
-
-## Running the Experiments
-
-### Option A — Orchestration notebook (recommended for reviewers)
-
-Open `CropSmart_NAFSI_Track1_Template.ipynb` in JupyterLab and run cells
-sequentially. Each section explains what it does, runs the pipeline, and
-displays key result figures and summary tables inline.
-
-```bash
-jupyter lab CropSmart_NAFSI_Track1_Template.ipynb
-```
-
-### Option B — Individual task notebooks
-
-Each task has its own folder with numbered notebooks that run top-to-bottom:
-
-```bash
+python -m pip install -r requirements.txt
+python -c "import src, numpy, pandas, rasterio; print('Imports OK')"
 jupyter lab
 ```
 
-| Task | Notebooks | Approx. runtime |
-|------|-----------|-----------------|
-| **Task 1** — NDVI Phenology | `notebooks/task1_ndvi_timeseries/01_*.ipynb` → `03_*.ipynb` | 2–45 min (HSGP sampling is the bottleneck) |
-| **Task 2** — Crop Rotation | `notebooks/task2_crop_rotation/01_*.ipynb` → `04_*.ipynb` | 5–15 min |
-| **Task 3** — Soil Moisture | `notebooks/task3_soil_moisture/01_*.ipynb` → `03_*.ipynb` | 5–10 min |
-| **Task 4** — Crop Mapping | `notebooks/task4_crop_mapping/01_*.ipynb` → `04_*.ipynb` | 10–30 min (training + SHAP) |
+On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1` instead.
+If native GDAL/rasterio installation fails, the dependency file describes a
+conda-forge alternative. Its NumPy markers distinguish Python versions below
+3.13 from 3.13 and later; those markers alone do not verify the whole stack.
 
-> **Optional — Hyperparameter Tuning (Task 4):**
-> An additional notebook `notebooks/task4_crop_mapping/02b_hyperparameter_tuning.ipynb`
-> uses [Optuna](https://optuna.org/) (Bayesian TPE search) to tune LightGBM hyperparameters
-> over a 9-dimensional search space. This is **not required** for reproducing the reported
-> results — the core NB02 ablation study uses the default hyperparameters. Running the
-> tuning notebook takes ~30–60 minutes and may yield 1–3 pp accuracy improvement.
-> We did not have sufficient time to fully complete this tuning pass before submission,
-> so we include it as a ready-to-run extension for future work.
+Run commands from the repository root. There is no Python package build
+configuration for `pip install -e .`; notebooks locate the root and import
+`src/` directly.
 
-### Option C — CLI scripts
+## Dataset Access
 
-Task 2 and Task 4 also have standalone CLI entry-points:
+The download script requests GeoTIFFs through Web Map Service (WMS) endpoints,
+using saved service metadata under `data/external/`. Catalog coverage is defined
+in [nafsi_catalog.py](src/utils/nafsi_catalog.py); each analysis uses a subset.
+
+| Product | Source and nominal resolution | Catalog years |
+|---------|-------------------------------|---------------|
+| CDL | [USDA NASS CropScape](https://nassgeodata.gmu.edu/CropScape), annual 30 m crop labels | 2008–2025 |
+| MODIS NDVI | [CropSmart](https://cloud.csiss.gmu.edu/CropSmart/), weekly 250 m normalized difference vegetation index | 2000–2026 |
+| SMAP L4 | CropSmart, weekly 9 km surface soil moisture (m³/m³) | 2015–2025 |
+| County boundaries | [U.S. Census TIGER/Line](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html) vectors, downloaded by [tiger_counties.py](src/io/tiger_counties.py) | 2024 |
+
+State summaries use a local shapefile under `data/external/states/` when
+available, otherwise Natural Earth's 1:110 million state polygons. Record the
+boundary source when reproducing spatial summaries; it can affect edge cells.
+
+Preview the requested years, then download and convert each product:
 
 ```bash
-python scripts/run_task2_rotation.py   --config configs/task2_crop_rotation.yaml
+python scripts/download_data.py --dataset plan
+python scripts/download_data.py --dataset cdl
+python scripts/download_data.py --dataset ndvi
+python scripts/download_data.py --dataset smap
+python scripts/build_interim_data.py --dataset all
+python scripts/process_interim_to_parquet.py --dataset cdl --source interim
+python scripts/process_interim_to_parquet.py --dataset ndvi --source interim
+python scripts/process_interim_to_parquet.py --dataset smap --source interim
+```
+
+Download options include `--year`, `--min-year`, `--max-year`, and `--resume`.
+Confirm the plan before requesting the full catalog. Runtime and storage depend
+on the selected years and remote service availability.
+
+The pipeline is GeoTIFF → NetCDF → Parquet with JSON metadata. CDL tables have
+annual `cdl_YYYY` columns; NDVI and SMAP tables have weekly `w000`, `w001`, …
+columns indexed by `iy`, `ix`. Keep the spatial and time metadata with the tables
+and check alignment before joining them. The converter's direct `--source wms`
+route uses a different grid from the interim route; do not mix their outputs.
+
+Native resolution is not analysis resolution. The saved rotation raster uses
+EPSG:5070 (NAD83 / Conus Albers), approximately 556.7 m cells and 30.9876 ha per
+cell. Resampling 9 km SMAP values onto those cells adds no spatial detail.
+
+## Running the Experiments
+
+**Current blocker:** [Task 1 notebook 02](notebooks/task1_ndvi_timeseries/02_ndvi_phenology_multi_year_cdl.ipynb)
+contains unresolved merge-conflict markers and is not valid notebook JSON. It
+needs repair before the full Task 1 sequence can run. The saved result tables
+and paper remain available for inspection.
+
+Run the numbered notebooks within each folder in order. Task 3 needs the
+rotation metrics produced by Task 2 as well as processed SMAP and CDL data.
+Rerunning notebooks can overwrite saved tables, models, and figures.
+
+| Task | Notebook folder | Sequence |
+|------|-----------------|----------|
+| 1 | [NDVI phenology](notebooks/task1_ndvi_timeseries/) | 01 ingestion → 02 yearly summaries → 03 HSGP |
+| 2 | [Crop rotation](notebooks/task2_crop_rotation/) | 01 loading → 02 metrics → 03 classification → 04 maps and area summaries |
+| 3 | [Soil moisture](notebooks/task3_soil_moisture/) | 01 pixel panel → 02 reference and anomalies → 03 maps and tables |
+| 4 | [Crop mapping](notebooks/task4_crop_mapping/) | 01 feature panel → 02 training and ablations → 03 SHAP and regime analysis → 04 maps |
+
+The optional Task 4 `02b_hyperparameter_tuning.ipynb` uses Optuna. The reported
+ablation results use the baseline settings; no improvement from tuning is
+established by the saved results.
+
+Task 4 also has a command-line runner for feature construction, training, and
+validation/test metrics. Use the notebooks for the ablations, SHAP analysis,
+and figures:
+
+```bash
 python scripts/run_task4_crop_mapping.py --config configs/task4_crop_mapping.yaml
 ```
 
----
-
-## Expected Outputs
-
-After a full run, the `artifacts/` directory is populated with all generated
-results. Nothing in this folder is hand-edited.
-
-### Figures (`artifacts/figures/`)
-
-| Task | Key Figures | Description |
-|------|-------------|-------------|
-| **Task 1** | `hsgp_phenology_crops.png`, `hsgp_phenology_corn_vs_soy.png`, `phenological_features_by_year.png`, `calibration_diagnostics.png` | HSGP posterior phenology curves, per-year feature comparison, model diagnostics |
-| **Task 2** | `task2__rotation_map__smoothed__*.png`, `task2__metric_histograms.png`, `task2__rotation_dm_p_regular__*.png`, `task2__rotation_class_by_county__*.png` | Rotation class maps (raw + smoothed), metric distributions, Bayesian P(regular) posterior, county choropleths |
-| **Task 3** | `task3__*__anomaly_map_4panel__*.png`, `task3__*__nig_p_drought_4panel__*.png`, `task3__*__anomaly_timeseries_cropland__*.png`, `task3__*__zscore_vs_nig_scatter__*.png` | Z-score raster maps, NIG posterior P(drought), belt-wide time series, frequentist vs Bayesian scatter |
-| **Task 4** | `task4_crop_maps_pred_vs_true.png`, `task4_confusion_matrices.png`, `task4_shap_importance.png`, `task4_ablation_comparison.png`, `task4_agreement_map.png` | Predicted vs true maps with state overlays, confusion matrices, SHAP bar/beeswarm, ablation study |
-
-### Tables (`artifacts/tables/`)
-
-| Task | Key Tables | Description |
-|------|------------|-------------|
-| **Task 1** | `hsgp_posterior_phenology.csv`, `model_evaluation.csv` | Posterior phenological parameters, model fit metrics |
-| **Task 2** | `task2__markov_transition_{counts,probs}.csv`, `task2__threshold_sensitivity_grid.csv`, areal stats CSVs | Markov chain tables, threshold sensitivity, state/county-level rotation class shares |
-| **Task 3** | `task3__*__anomaly_stats_by_state_crop__*.csv` | State × crop anomaly summaries (z-score + NIG posterior columns) for both events |
-| **Task 4** | `task4_ablation_results.csv`, `task4_shap_feature_importance.csv`, `task4_regime_stratified_metrics.csv`, `task4__test_metrics__*.json` | Ablation study (4 configurations), top-20 SHAP values, rotation-regime performance, test-year metrics |
-
-### Models (`artifacts/models/`)
-
-| File | Description |
-|------|-------------|
-| `task4/crop_type_model.joblib` | Trained LightGBM classifier (4-class, ~500 trees) |
-| `task4/crop_type_model_tuned.joblib` | *(Optional)* Optuna-tuned LightGBM — generated by `02b_hyperparameter_tuning.ipynb` |
-
----
+`scripts/run_task2_rotation.py` prints notebook guidance; it does not execute
+Task 2. The [orchestration notebook](CropSmart_NAFSI_Track1_Template.ipynb) is an
+overview, but its editable-install step and `--dataset all` Parquet conversion
+call are incompatible with the current repository. Use the steps above for
+those operations.
 
 ## Key Results Summary
 
-| Task | Headline Result |
-|------|-----------------|
-| **Task 1** | HSGP posterior curves clearly separate corn (later green-up, higher peak NDVI) from soybean, with calibrated uncertainty bands across years. |
-| **Task 2** | 16–17% of eligible pixels follow strict annual corn–soy rotation (regular), 27% monoculture (≥7 consecutive years of one crop), and 56% irregular. Bayesian Dirichlet–Multinomial posterior P(regular) provides pixel-level uncertainty. |
-| **Task 3** | 2019 Midwest Flood: mean z-score +0.91 (Iowa corn); 2022 Plains Drought: Kentucky winter wheat hardest hit (mean z = −1.57, 42% pixel-weeks with NIG P(drought) < 0.10). NIG posterior exposes data-sparse regions where z-scores alone would be misleading. |
-| **Task 4** | **79.2% overall accuracy**, macro F1 = 0.791 on 2023 holdout. Ablation shows NDVI adds +1.7 pp accuracy over CDL-only; SMAP adds +0.07 pp. Monoculture pixels are easiest (95.5% accuracy); irregular rotation is hardest (70.9%). Top SHAP features: prior-year CDL code, NDVI mid-season mean, growing-season SMAP mean. |
+These are saved study results, with their comparison conditions. They are not
+live forecasts or independently validated measures of agricultural damage.
 
----
+| Task | Result | Evidence |
+|------|--------|----------|
+| **1** | The pooled posterior mean curves peak at day of year 204 for corn, 226 for soybean, and 147 for winter wheat. In-sample root mean squared error (RMSE) is 0.0183–0.0232 NDVI units; 90% predictive intervals cover 90.09–91.21% of the 535 observed crop-week means per crop. This does not establish performance on new years or fields. | [Curves](artifacts/tables/task1/hsgp_posterior_phenology.csv), [fit metrics](artifacts/tables/task1/model_evaluation.csv) |
+| **2** | The smoothed map classifies 2,084,112 eligible cells: 27.36% regular rotation, 3.90% monoculture, and 68.74% irregular. In the separate unsmoothed threshold sweep, the regular share ranges from 28.15% to 60.33%. | [Area table](artifacts/tables/task4/task2__areal_stats_by_class__20260412.csv), [threshold sweep](artifacts/tables/task2/task2__threshold_sensitivity_grid.csv) |
+| **3** | Iowa corn has mean z = +0.9145 over 2,901,150 pixel-weeks in the 2019 window. The Kentucky wheat/soy double-crop stratum has mean z = −1.5715 over 49,543 pixel-weeks in 2022; 41.96% have a lower-tail NIG score below 0.10. | [2019](artifacts/tables/task3/task3__midwest_flood_2019__anomaly_stats_by_state_crop__20260412.csv), [2022](artifacts/tables/task3/task3__plains_drought_2022__anomaly_stats_by_state_crop__20260412.csv) |
+| **4** | Full-model accuracy is 79.21%, macro F1 0.7914, on 500,000 balanced 2023 test observations (125,000 per class). On the separate 2022 validation sample, accuracy is 80.59% for CDL only, 82.33% for CDL+NDVI, 80.66% for CDL+SMAP, and 82.26% for all three. | [Test metrics](artifacts/tables/task4/task4__test_metrics__20260413.json), [splits](artifacts/tables/task4/task4_split_summary.csv), [ablations](artifacts/tables/task4/task4_ablation_results.csv) |
 
-## Directory Structure
+Task 4 test accuracy varies by prior crop history: 95.55% for monoculture
+(124,318 observations), 87.41% for regular rotation (65,574), and 70.92% for
+irregular histories (310,108). These [regimes](artifacts/tables/task4/task4_regime_stratified_metrics.csv)
+use histories before 2023, so they differ from the 2015–2024 rotation map.
+The largest [mean absolute SHAP values](artifacts/tables/task4/task4_shap_feature_importance.csv)
+belong to the previous year's CDL code, mid-season NDVI mean, and NDVI peak week.
+SHAP (Shapley additive explanations) describes feature contributions to model
+predictions, not causal effects.
 
-```
-Nafsi-Corn-Belt-Modeling/
-│
-├── README.md                          # This file
-├── requirements.txt                   # Pinned Python dependencies
-├── CropSmart_NAFSI_Track1_Template.ipynb  # One-click orchestration notebook
-│
-├── configs/                           # YAML configs (no magic numbers in code)
-│   ├── task1_ndvi_analysis.yaml
-│   ├── task2_crop_rotation.yaml
-│   ├── task3_soil_moisture.yaml
-│   ├── task4_crop_mapping.yaml
-│   └── study_extent.yaml
-│
-├── notebooks/                         # Analysis notebooks (run in numbered order)
-│   ├── task1_ndvi_timeseries/         # 3 notebooks: data → phenology → HSGP Bayesian
-│   ├── task2_crop_rotation/           # 4 notebooks: load → metrics → classify → maps
-│   ├── task3_soil_moisture/           # 3 notebooks: panel → climatology → maps/tables
-│   └── task4_crop_mapping/            # 4 notebooks: features → train → SHAP → maps
-│
-├── src/                               # Reusable Python package (pip install -e .)
-│   ├── io/                            #   Data loaders: CDL Parquet, SMAP weekly, TIGER
-│   ├── preprocessing/                 #   Feature engineering (Task 4 panel builder)
-│   ├── modeling/                      #   Classifiers, Bayesian models, anomaly modules
-│   ├── viz/                           #   Plotting: rotation maps, anomaly maps, prediction maps
-│   └── utils/                         #   NAFSI catalog, study extent, shared helpers
-│
-├── scripts/                           # CLI entry-points
-│   ├── download_data.py               #   Download raw GeoTIFFs from CropSmart / NDP
-│   ├── build_interim_data.py          #   Raw GeoTIFF → interim NetCDF stacks
-│   ├── process_interim_to_parquet.py  #   Interim NetCDF → analysis-ready Parquet
-│   ├── setup_earthdata_netrc.py       #   Configure NASA Earthdata credentials for SMAP
-│   ├── run_task2_rotation.py          #   CLI: full Task 2 pipeline
-│   └── run_task4_crop_mapping.py      #   CLI: full Task 4 pipeline
-│
-├── data/                              # Data directory (gitignored)
-│   ├── raw/                           #   Downloaded GeoTIFFs (cdl/, ndvi/, smap/)
-│   ├── interim/                       #   NetCDF stacks (cdl/, ndvi/, smap/)
-│   ├── processed/                     #   Wide Parquet + JSON sidecars (cdl/, ndvi/, smap/, task2/, task3/)
-│   └── external/                      #   TIGER boundaries, reference metadata
-│
-├── artifacts/                         # All generated outputs (never hand-edited)
-│   ├── figures/                       #   PNG plots organized by task (task1–task4)
-│   ├── tables/                        #   CSV/JSON summary tables by task
-│   ├── models/                        #   Serialized trained models (task4/)
-│   └── reports/                       #   Auto-generated report sections
-│
-└── resources/                         # Reference literature and challenge brief (PDF)
-```
+## Expected Outputs and Directory Structure
 
----
+| Location | Contents |
+|----------|----------|
+| [src/](src/), [scripts/](scripts/), [notebooks/](notebooks/) | Shared Python functions, command-line tools, and analyses |
+| [configs/](configs/) | Study extent, task settings, model parameters, and output paths |
+| `data/raw/`, `data/interim/`, `data/processed/` | Local downloads, stacks, and analysis tables; excluded from Git |
+| [data/external/](data/external/) | Service metadata and local boundary caches |
+| [artifacts/figures/](artifacts/figures/), [artifacts/tables/](artifacts/tables/) | Saved figures and CSV/JSON results; most are grouped by task. Task 2 area summaries are under `tables/task4/`. |
+| [artifacts/models/task4/](artifacts/models/task4/) | Saved crop classifier; optional tuned model is produced only by the tuning notebook |
+| [artifacts/reports/](artifacts/reports/) | Editable manuscript, bibliography, extracted text, and generated PDFs |
+| [dashboard/](dashboard/) | Interactive presentation of saved tables and the paper |
+| [resources/](resources/) | Challenge brief and reference literature |
 
-## Separation of Code, Data, and Results
+## Configuration and Reproducibility
 
-The repository enforces a strict separation:
+Task YAML files define many settings, including rotation thresholds, moisture
+event windows, classifier splits, and output paths. They are not a complete
+record of every parameter: HSGP fitting settings and other choices also live in
+notebook cells or Python defaults. Read the notebook alongside its config when
+changing an experiment.
 
-- **Code** lives in `src/` (reusable package), `scripts/` (CLI tools), and
-  `notebooks/` (analysis). All hyperparameters and thresholds are externalized
-  to YAML files under `configs/`.
-- **Data** lives under `data/` with a three-tier pipeline (raw → interim →
-  processed). All data directories are gitignored; the download scripts
-  regenerate them deterministically.
-- **Results** live under `artifacts/` with subdirectories for figures, tables,
-  models, and reports. Each task's outputs are namespaced (`task1/`, `task2/`,
-  etc.). Artifacts are generated programmatically by notebooks and scripts —
-  never hand-edited.
-
----
-
-## Configuration
-
-All experiment parameters are defined in YAML config files under `configs/`.
-Notebooks and scripts load these configs at the top of each run, so there are
-no hardcoded thresholds or magic numbers in the analysis code.
-
-| Config File | Controls |
-|-------------|----------|
-| `task1_ndvi_analysis.yaml` | CDL year, study area bounds, purity threshold, HSGP kernel parameters |
-| `task2_crop_rotation.yaml` | CDL year range, rotation metric thresholds, classification rules, Bayesian DM priors |
-| `task3_soil_moisture.yaml` | Baseline period, event definitions, NIG prior hyperparameters, anomaly method |
-| `task4_crop_mapping.yaml` | Target classes, feature set toggles, LightGBM hyperparameters, train/val/test split, ablation configs |
-| `study_extent.yaml` | 13-state Corn Belt bounding box and state list |
-
----
-
-## Data Pipeline Detail
-
-The data flows through three stages, each handled by a dedicated script:
-
-```
-  Raw GeoTIFFs              Interim NetCDF stacks         Analysis-ready Parquet
-  ┌──────────┐  build_     ┌──────────────────┐  process_  ┌──────────────────┐
-  │ CDL .tif │─ interim_ ─▶│ cdl_stack.nc     │─ interim_ ▶│ cdl_stack_wide   │
-  │ NDVI .tif│  data.py    │ ndvi_weekly_Y.nc │  to_       │   .parquet       │
-  │ SMAP .tif│             │ smap_weekly_Y.nc │  parquet.py│ + _metadata.json │
-  └──────────┘             └──────────────────┘            └──────────────────┘
-       ▲                                                          │
-  download_data.py                                     notebooks read these
-```
-
-**Processed Parquet schema:** Wide tables indexed by pixel coordinates (`iy`,
-`ix`) with weekly columns (`w000`, `w001`, …). Each Parquet file has a
-companion JSON sidecar containing the affine transform, CRS (EPSG:5070), grid
-dimensions, and week-to-date mapping.
-
----
-
-## Evaluation Metrics
-
-| Task | Metrics Used |
-|------|-------------|
-| **Task 1** | Posterior predictive checks, HSGP calibration diagnostics, phenological feature extraction (green-up week, peak NDVI, amplitude) |
-| **Task 2** | Alternation score, pattern edit distance, Shannon entropy, max run length; threshold sensitivity analysis; Bayesian DM posterior P(regular) and posterior std |
-| **Task 3** | Z-score anomaly maps, NIG posterior P(drought), NIG posterior predictive scale, duration fraction (% weeks exceeding threshold), state × crop summary statistics |
-| **Task 4** | Overall accuracy (OA), macro F1-score, per-class F1, 4×4 confusion matrix, SHAP mean |SHAP| feature importance, ablation study (4 feature configurations), rotation-regime stratified accuracy |
-
----
-
-## Experiment Tracking and Logging
-
-- **Run bundles:** Each notebook execution writes a `run_bundle.json` to
-  `artifacts/logs/runs/` containing the config snapshot, timestamp, input/output
-  file paths, and summary metrics for that run.
-- **Artifact naming:** All generated files embed a date stamp
-  (`YYYYMMDD`) in their filename for traceability
-  (e.g., `task3__midwest_flood_2019__nig_p_drought_4panel__20260412.png`).
-- **Configs as records:** Because all parameters live in YAML configs, any run
-  can be reproduced by re-running the notebook with the same config file.
-
----
+Retain the input versions, metadata, environment, settings, and random seeds
+when comparing runs. Dated result filenames identify specific exports, but
+some outputs use fixed filenames and can be overwritten. The paper's
+[figure-source manifest](artifacts/reports/rewrite/figures/source_manifest.json)
+records hashes of the seven inputs used for its generated panels.
+Task 2 notebook 04 and Task 3 notebook 03 also write local `run_bundle.json`
+records under `artifacts/logs/runs/`; retain these with the inputs for a rerun.
 
 ## Testing and Validation
 
-- **Evaluation metrics** are implemented directly in the analysis notebooks and
-  `src/` modules (confusion matrices, F1 scores, ablation comparisons, SHAP).
-- **Results are reproducible:** All outputs under `artifacts/` can be
-  regenerated by re-running notebooks or the orchestration notebook. Random
-  seeds are set in configs and applied consistently.
-- **Sanity checks in notebooks:** Each notebook includes inline validation
-  (shape assertions, distribution histograms, NaN audits) before proceeding
-  to the analysis stage.
-- **Ablation study (Task 4):** Systematically evaluates four feature
-  configurations (CDL-only → CDL+NDVI → CDL+SMAP → full) to validate each
-  data source's contribution, with metrics saved to
-  `artifacts/tables/task4/task4_ablation_results.csv`.
-- **Regime-stratified evaluation (Task 4):** Model performance is broken down
-  by rotation regime (regular, monoculture, irregular) to assess robustness
-  across different agricultural practices.
+The notebooks contain fit diagnostics, confusion matrices, ablations, and
+other analysis checks. The [dashboard guide](dashboard/README.md#verification)
+lists its automated checks. A complete fresh-environment reproduction is not
+established by the saved outputs alone.
 
----
+Important interpretation limits:
 
-## Contribution History
+- **Spatial support:** the rotation denominator includes 66,107 cells outside
+  the 13 state polygons, about 3.17% of the buffered raster footprint. State
+  summaries exclude them. Coarse-cell area is not a direct USDA acreage estimate.
+- **Uncertainty:** HSGP fit checks are in sample. The Dirichlet–Multinomial
+  rotation score concerns transition probabilities; it is not a calibrated
+  probability that the rule-based rotation label is correct.
+- **Moisture:** the reference has at most seven observations per cell and ISO
+  week and includes the 2019 event itself. `nig_p_drought` is a Student-t
+  predictive cumulative probability at the observed moisture: near zero means
+  unusually dry, near one unusually wet. It is not the probability of drought
+  or crop damage. Pixel-weeks sharing a SMAP cell are not independent readings.
+- **Crop labels:** the Task 3 tables call CDL code 26 `winter_wheat`; that code
+  denotes winter wheat/soybean double crop. Tasks 1 and 4 use code 24 for winter
+  wheat. Keep that distinction when comparing tasks.
+- **Classification:** the target is another satellite product, CDL, rather than
+  field-survey truth. Class-balanced accuracy does not estimate landscape-wide
+  accuracy. Current-season inputs make this a retrospective classification
+  study, not a pre-plant forecast. Training and test paths construct NDVI
+  history and SMAP features differently; the effect has not been quantified.
+  SMAP features are missing for the 2013–2014 training rows.
 
-Commit history and contributions are tracked through git. All team members have
-contributed across the project timeline. See `git log --oneline --graph` for
-the full history.
+## Sources and License
 
----
+The [challenge brief](resources/CropSmart_NAFSI_Track1_Challenge_Brief.docx.pdf)
+defines the task, and the paper's [bibliography](artifacts/reports/references.bib)
+credits the methods and data products. Data come from USDA NASS, NASA/MODIS,
+NASA SMAP, CropSmart, and the U.S. Census Bureau.
+Natural Earth supplies the fallback state boundaries.
 
-## Submission
-
-**Deadline:** April 13, 2026 — 4:00 PM CT. No repository updates after the deadline.
-
-**Evaluation rubric (from challenge brief):**
-
-| Category | Weight |
-|----------|--------|
-| Analytical Accuracy | 35% |
-| Methodology & Reproducibility | 30% |
-| Innovation | 20% |
-| Communication | 15% |
-
----
-
-## License
-
-All input datasets (CDL, MODIS NDVI, SMAP) are publicly available U.S.
-government or NASA data products. See `context/DATASETS.md` for individual
-licensing details.
+This repository does not include a code license or a consolidated record of
+dataset reuse terms. Public data access does not specify those terms; consult
+the original providers and reference publications before redistribution.

@@ -1,36 +1,47 @@
 # Nafsi2026
 
-Next.js evidence website for the Nafsi2026 project. The
-site opens directly into one source-backed analytical workspace for four
-research tasks across the U.S. Corn Belt.
+This dashboard lets readers explore the Corn Belt study's saved results:
+seasonal vegetation curves, crop rotation, soil moisture anomalies, and crop
+classification. It reads the repository's CSV/JSON tables and includes the
+[paper](../Reading_the_Corn_Belt.pdf). It does not run models or fetch live
+satellite observations.
 
 ## Experience
 
-- **Explore:** four shareable task tabs—phenology, rotation, extremes, and
-  prediction—with controls beside the evidence they
-  affect. There is no universal map or six-field global filter wall.
-- **Maps:** measured regular-rotation share at state/county grain and matched
-  state-grain flood/drought anomaly maps. Task 1 and Task 4 remain chart-led.
-- **Evidence:** visible source paths, artifact dates, denominators, uncertainty,
-  method caveats, limitations, and named missing-data states.
-- **Paper:** the `Reading the Corn Belt` drawer shows the revised manuscript
-  with expanded methodology and technical appendices, with embedded reading,
-  open, and download actions.
-- **Compatibility:** old `view=story` / `view=explore` parameters are ignored
-  and removed on the next state update while valid task/filter context remains;
-  retired map layers show a warning and use measured regular-rotation share.
+- **Phenology:** compare crop NDVI curves and seasonal windows, with uncertainty
+  and fit diagnostics.
+- **Rotation:** explore regular-rotation shares by state or county and compare
+  classification thresholds.
+- **Extremes:** compare state-level moisture summaries for the 2019 wet season
+  and 2022 dry spell.
+- **Prediction:** inspect feature-group comparisons, confusion matrices,
+  feature attribution, and accuracy by crop-history regime.
+- **Paper:** read the manuscript in a drawer, open it in a separate tab, or
+  download it.
+
+Task and filter selections are stored in the URL for sharing. Panels show source
+paths, export dates, denominators, and interpretation notes; missing artifacts
+produce explicit unavailable/error states.
 
 ## Local Development
 
+Keep the full repository checkout: the app reads tables from `../artifacts/`.
+Use Node.js 22 (22.12 or later) or 24+, with npm, to satisfy the locked app and
+test dependencies. From the repository root:
+
 ```bash
-npm install
+cd dashboard
+npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000>. No secrets, database, backend, or remote data
-service are required.
+Open <http://localhost:3000>. The app needs no database, API credentials, or
+remote data service. The Python analysis environment is unnecessary for viewing
+the saved results.
 
 ## Verification
+
+Run inside `dashboard/`:
 
 ```bash
 npm run test
@@ -40,34 +51,47 @@ npm run build
 npm audit --audit-level=high
 ```
 
+Tests cover components, data normalization, selectors, and URL state. They do
+not include an end-to-end browser suite or validate the underlying scientific
+analyses. After building, `npm start` serves the production app locally.
+
 ## Tech Stack
 
-- Next.js 16.3.1, React 19, TypeScript 5.9, Tailwind CSS v4.
-- Recharts for the HSGP comparator and diagnostic charts.
-- D3 Geo, TopoJSON Client, and `us-atlas` for code-native Albers geography.
-- Local Radix-backed UI primitives and Lucide icons.
-- Static CSV/JSON artifact loading and URL-backed analytical state.
-- Vitest and Testing Library.
+- Next.js 16.3.1 (locked version), React 19, TypeScript 5.9, Tailwind CSS v4.
+- Recharts for plots; D3 Geo, TopoJSON Client, and `us-atlas` for Albers maps.
+- Radix UI primitives and Lucide icons; Vitest and Testing Library.
 
 ## Data and Deployment
 
-- Parent `../artifacts/tables/` CSV/JSON files are the result authority.
-- The paper PDF is served from
-  `public/papers/Reading_the_Corn_Belt.pdf`. The embedded viewer, Open PDF,
-  and Download PDF all use `/papers/Reading_the_Corn_Belt.pdf`.
-  Keep this file synchronized with `../Reading_the_Corn_Belt.pdf` when
-  regenerating the manuscript.
-- Large Parquet and GeoTIFF artifacts are not shipped to the browser.
-- The target host is Vercel; project settings are not configured in this repo.
+[sources.ts](src/lib/data/sources.ts) lists the result files and their scope.
+[loaders.ts](src/lib/data/loaders.ts) reads them from the filesystem on the
+server; normalized summaries are passed to the interactive components.
+Large Parquet and GeoTIFF files are not sent to the browser. When replacing
+results, check the expected columns, units, denominators, and export dates in
+the source definitions.
+
+The embedded reader, Open PDF, and Download PDF actions all use
+`/papers/Reading_the_Corn_Belt.pdf`, served from
+[public/papers/Reading_the_Corn_Belt.pdf](public/papers/Reading_the_Corn_Belt.pdf).
+Keep it synchronized with the root paper using the
+[paper build guide](../artifacts/reports/rewrite/README.md).
+
+Vercel is the intended host, but host project settings are not defined here.
+A deployment must include the referenced tables outside `dashboard/` and the
+public PDF. Deploying the dashboard directory alone omits its data sources.
 
 ## Known Boundaries
 
-- Task 2 geography is aggregate state/county evidence, not field or pixel
-  precision. Task 3 is state-grain only.
-- Task 4 is a concurrent-season diagnostic conclusion, not a pre-plant forecast,
-  and has no geographic prediction layer without a supporting browser-safe
-  artifact.
-- The paper reader uses the browser-native PDF viewer; no viewer package was
-  added.
-- Automated coverage is component-level; end-to-end browser tests are not
-  included.
+- Rotation maps summarize eligible cells within states/counties, not individual
+  fields. Moisture maps are state-level summaries of a crop-history-selected
+  footprint, not mapped flood extent or drought damage.
+- Crop classification uses current-season inputs and CDL reference labels;
+  it is not a pre-plant forecast. There is no geographic prediction layer.
+- The PDF reader depends on the browser's built-in viewer; Open PDF and Download
+  PDF provide alternatives.
+- Older `view=story` / `view=explore` parameters are removed when state changes.
+  Retired map-layer selections show a warning and fall back to measured
+  regular-rotation share.
+
+See the [study's validation limits](../README.md#testing-and-validation) before
+interpreting the displayed scores.
